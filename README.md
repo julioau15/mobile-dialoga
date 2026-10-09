@@ -57,7 +57,7 @@ Além do aplicativo mobile, o DiaLoga possui uma aplicação web para acesso atr
 | Mayara Martins | [@maymandrade](https://github.com/maymandrade)   |
 | Allan de Souza | [@Dilansty](https://github.com/Dilansty)         |
 | Brayan Alves   | [@Brayan717171](https://github.com/Brayan717171) |
-| Enzo Crepaldi  | —                                                |
+| Enzo Crepaldi  | [@Enzu666](https://github.com/Enzu666)           |
 
 ---
 
