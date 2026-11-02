@@ -1,0 +1,83 @@
+package com.example.dialogamobile.navigation
+
+import androidx.compose.runtime.Composable
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.dialogamobile.ui.screens.modelo.TelaEmBranco
+
+// Layouts
+import com.example.dialogamobile.ui.layouts.DialogaScreen
+import com.example.dialogamobile.ui.layouts.LayoutPaciente
+import com.example.dialogamobile.ui.layouts.LayoutProfissional
+
+// Auth
+import com.example.dialogamobile.ui.screens.auth.CadastroScreen
+import com.example.dialogamobile.ui.screens.auth.LoginScreen
+import com.example.dialogamobile.ui.screens.auth.PrimeiroAcessoScreen
+
+// Paciente
+import com.example.dialogamobile.ui.screens.paciente.AgendaPacienteScreen
+import com.example.dialogamobile.ui.screens.paciente.DashboardPacienteScreen
+import com.example.dialogamobile.ui.screens.paciente.NotificacoesPacienteScreen
+import com.example.dialogamobile.ui.screens.paciente.PerfilPacienteScreen
+import com.example.dialogamobile.ui.screens.paciente.ProfissionaisPacienteScreen
+import com.example.dialogamobile.ui.screens.paciente.RelatoriosPacienteScreen
+import com.example.dialogamobile.ui.screens.paciente.TarefasPacienteScreen
+import com.example.dialogamobile.ui.screens.paciente.TratamentosPacienteScreen
+
+// Profissional
+import com.example.dialogamobile.ui.screens.profissional.AgendaProfissionalScreen
+import com.example.dialogamobile.ui.screens.profissional.DashboardProfissionalScreen
+import com.example.dialogamobile.ui.screens.profissional.NotificacoesProfissionalScreen
+import com.example.dialogamobile.ui.screens.profissional.PacientesProfissionalScreen
+import com.example.dialogamobile.ui.screens.profissional.PerfilProfissionalScreen
+import com.example.dialogamobile.ui.screens.profissional.TarefasProfissionalScreen
+
+@Composable
+fun AppNavHost() {
+    val navController = rememberNavController()
+
+    // TODO: voltar startDestination para Rotas.LOGIN após o teste
+    NavHost(navController = navController, startDestination = Rotas.TELA_TESTE) {
+        // Públicas
+        composable(Rotas.LOGIN) { LoginScreen() }
+        composable(Rotas.CADASTRO) { DialogaScreen(navController) { CadastroScreen() } }
+        composable(Rotas.PRIMEIRO_ACESSO) { DialogaScreen(navController) { PrimeiroAcessoScreen() } }
+
+        // Teste
+        composable(Rotas.TELA_TESTE) { TelaEmBranco(navController) }
+
+        // Paciente
+        val paciente = mapOf<String, @Composable () -> Unit>(
+            Rotas.Paciente.DASHBOARD to { DashboardPacienteScreen() },
+            Rotas.Paciente.AGENDA to { AgendaPacienteScreen() },
+            Rotas.Paciente.TAREFAS to { TarefasPacienteScreen() },
+            Rotas.Paciente.TRATAMENTOS to { TratamentosPacienteScreen() },
+            Rotas.Paciente.PROFISSIONAIS to { ProfissionaisPacienteScreen() },
+            Rotas.Paciente.RELATORIOS to { RelatoriosPacienteScreen() },
+            Rotas.Paciente.NOTIFICACOES to { NotificacoesPacienteScreen() },
+            Rotas.Paciente.PERFIL to { PerfilPacienteScreen() },
+        )
+        paciente.forEach { (rota, tela) ->
+            composable(rota) {
+                RequireAuth("paciente", navController) { LayoutPaciente(navController) { tela() } }
+            }
+        }
+
+        // Profissional
+        val profissional = mapOf<String, @Composable () -> Unit>(
+            Rotas.Profissional.DASHBOARD to { DashboardProfissionalScreen() },
+            Rotas.Profissional.AGENDA to { AgendaProfissionalScreen() },
+            Rotas.Profissional.PACIENTES to { PacientesProfissionalScreen() },
+            Rotas.Profissional.TAREFAS to { TarefasProfissionalScreen() },
+            Rotas.Profissional.NOTIFICACOES to { NotificacoesProfissionalScreen() },
+            Rotas.Profissional.PERFIL to { PerfilProfissionalScreen() },
+        )
+        profissional.forEach { (rota, tela) ->
+            composable(rota) {
+                RequireAuth("profissional", navController) { LayoutProfissional(navController) { tela() } }
+            }
+        }
+    }
+}
