@@ -11,6 +11,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.aulasandroid.mobiledialoga.navigation.AppNavigation
 import com.aulasandroid.mobiledialoga.ui.theme.MobileDialogaTheme
 
 
@@ -22,22 +23,11 @@ class MainActivity :
         setContent {
             MobileDialogaTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Home(
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                    MobileDialogaTheme {
+                        AppNavigation()
+                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-fun Home (modifier: Modifier) {
-    Column(
-        modifier
-    ) {
-        Text(
-            text = "Android"
-        )
     }
 }

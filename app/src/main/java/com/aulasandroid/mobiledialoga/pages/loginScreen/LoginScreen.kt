@@ -1,6 +1,5 @@
 package com.aulasandroid.mobiledialoga.pages.loginScreen
 
-import android.R.attr.contentDescription
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -48,6 +47,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aulasandroid.mobiledialoga.R
+import com.aulasandroid.mobiledialoga.ui.theme.CorBorda
+import com.aulasandroid.mobiledialoga.ui.theme.CorBranco
+import com.aulasandroid.mobiledialoga.ui.theme.CorFundoLogin
+import com.aulasandroid.mobiledialoga.ui.theme.CorPrimaria
+import com.aulasandroid.mobiledialoga.ui.theme.CorSecundaria
+import com.aulasandroid.mobiledialoga.ui.theme.CorTexto
+import com.aulasandroid.mobiledialoga.ui.theme.MobileDialogaTheme
+
 
 /**
  * Tela de login — somente estilização (sem navegação, links ou chamadas à API).
@@ -156,7 +163,7 @@ fun LoginScreen() {
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("••••••••", fontSize = 14.sp) },
                 leadingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
-                trailingIcon = { Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                trailingIcon = { Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(20.dp)) },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 shape = formato,
@@ -261,7 +268,7 @@ fun LoginScreen() {
 @Preview(showBackground = true, showSystemUi = true)
 @Composable
 fun LoginScreenPreview() {
-    DialogaMobileTheme {
+    MobileDialogaTheme() {
         LoginScreen()
     }
 }
