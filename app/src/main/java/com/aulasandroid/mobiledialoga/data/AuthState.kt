@@ -11,6 +11,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import com.aulasandroid.mobiledialoga.data.remote.RetrofitFactory
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -18,26 +19,48 @@ private const val PREFS = "auth"
 
 data class Auth(val token: String, val nivel: String)
 
+class AuthException(message: String, val codigo: String?) : Exception(message)
+
 class AuthState(private val context: Context) {
     var auth by mutableStateOf(carregar())
         private set
 
     // Login utilizando Retrofit (seguindo o modelo de consumo de API do projeto modelo)
     suspend fun login(email: String, senha: String): Auth {
-        // monta o body da requisiçâo
+        // monta o body da requisição
         val jsonBody = JsonObject().apply {
             addProperty("email", email)
             addProperty("senha", senha)
         }
 
-        // faz a requisição
+        // faz a requisição e trata tanto sucesso quanto erro retornado pelo backend
         val data = withContext(Dispatchers.IO) {
             val response = RetrofitFactory().getAuthService().login(jsonBody).execute()
-            response.body() ?: throw Exception("Erro na resposta do servidor")
+            if (response.isSuccessful) {
+                response.body() ?: throw Exception("Erro na resposta do servidor")
+            } else {
+                val errorBody = response.errorBody()?.string()
+                if (!errorBody.isNullOrBlank()) {
+                    try {
+                        val errorJson = JsonParser().parse(errorBody).asJsonObject
+                        val msg = if (errorJson.has("message")) errorJson.get("message").asString else "Erro ao realizar login"
+                        val codigo = if (errorJson.has("codigo")) errorJson.get("codigo").asString else null
+                        throw AuthException(msg, codigo)
+                    } catch (e: AuthException) {
+                        throw e
+                    } catch (e: Exception) {
+                        throw Exception(errorBody)
+                    }
+                } else {
+                    throw Exception("Erro no servidor (Código ${response.code()})")
+                }
+            }
         }
 
         if (!data.get("status").asBoolean) {
-            throw Exception(data.get("message")?.asString ?: "Erro ao realizar login")
+            val msg = if (data.has("message")) data.get("message").asString else "Erro ao realizar login"
+            val codigo = if (data.has("codigo")) data.get("codigo").asString else null
+            throw AuthException(msg, codigo)
         }
 
         val primeiro = data.getAsJsonObject("response").getAsJsonArray("auth").get(0).asJsonObject

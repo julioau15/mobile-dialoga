@@ -3,6 +3,7 @@ package com.aulasandroid.mobiledialoga.feature.auth.cadastro
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import com.aulasandroid.mobiledialoga.core.error.ErrorTranslator
 import com.aulasandroid.mobiledialoga.core.validation.EmailValidator
 import com.aulasandroid.mobiledialoga.core.validation.PasswordValidator
 import com.aulasandroid.mobiledialoga.core.validation.PhoneValidator
@@ -144,8 +145,9 @@ class CadastroViewModel : ViewModel() {
                     // Disponível! Avança para a etapa de senha
                     _uiState.value = estado.copy(isLoading = false, etapa = EtapaCadastro.SENHA, erroGeral = null)
                 } else {
-                    val msg = json?.get("message")?.asString ?: "Este cadastro já existe no sistema."
-                    val lowerMsg = msg.lowercase()
+                    val rawMsg = json?.get("message")?.asString
+                    val msg = ErrorTranslator.traduzir(rawMsg)
+                    val lowerMsg = (rawMsg ?: "").lowercase()
                     val erroEmail = if (lowerMsg.contains("e-mail") || lowerMsg.contains("email")) msg else null
                     val erroCelular = if (lowerMsg.contains("celular")) msg else null
                     val erroCpf = if (lowerMsg.contains("cpf")) msg else null
@@ -165,7 +167,7 @@ class CadastroViewModel : ViewModel() {
             override fun onFailure(call: Call<JsonObject>, t: Throwable) {
                 _uiState.value = estado.copy(
                     isLoading = false,
-                    erroGeral = t.message ?: "Erro de conexão ao verificar cadastro"
+                    erroGeral = ErrorTranslator.traduzir(t.message)
                 )
             }
         })
@@ -210,7 +212,8 @@ class CadastroViewModel : ViewModel() {
                             reiniciar()
                             onPacienteCadastrado()
                         } else {
-                            val msg = json?.get("message")?.asString ?: "Erro ao cadastrar paciente"
+                            val rawMsg = json?.get("message")?.asString
+                            val msg = ErrorTranslator.traduzir(rawMsg)
                             _uiState.value = estado.copy(isLoading = false, erroGeral = msg)
                         }
                     }
@@ -218,7 +221,7 @@ class CadastroViewModel : ViewModel() {
                     override fun onFailure(call: Call<JsonObject>, t: Throwable) {
                         _uiState.value = estado.copy(
                             isLoading = false,
-                            erroGeral = t.message ?: "Erro de conexão com o servidor"
+                            erroGeral = ErrorTranslator.traduzir(t.message)
                         )
                     }
                 })
@@ -241,7 +244,8 @@ class CadastroViewModel : ViewModel() {
                     if (response.isSuccessful && (json?.get("status")?.asBoolean == true)) {
                         _uiState.value = estado.copy(isLoading = false, etapa = EtapaCadastro.EM_ANALISE)
                     } else {
-                        val msg = json?.get("message")?.asString ?: "Erro ao cadastrar profissional"
+                        val rawMsg = json?.get("message")?.asString
+                        val msg = ErrorTranslator.traduzir(rawMsg)
                         _uiState.value = estado.copy(isLoading = false, erroGeral = msg)
                     }
                 }
@@ -249,7 +253,7 @@ class CadastroViewModel : ViewModel() {
                 override fun onFailure(call: Call<JsonObject>, t: Throwable) {
                     _uiState.value = estado.copy(
                         isLoading = false,
-                        erroGeral = t.message ?: "Erro de conexão com o servidor"
+                        erroGeral = ErrorTranslator.traduzir(t.message)
                     )
                 }
             })

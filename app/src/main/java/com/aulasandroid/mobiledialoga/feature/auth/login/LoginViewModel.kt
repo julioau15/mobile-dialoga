@@ -4,7 +4,9 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.aulasandroid.mobiledialoga.core.error.ErrorTranslator
 import com.aulasandroid.mobiledialoga.core.validation.EmailValidator
+import com.aulasandroid.mobiledialoga.data.AuthException
 import com.aulasandroid.mobiledialoga.data.AuthState
 import kotlinx.coroutines.launch
 
@@ -24,7 +26,7 @@ class LoginViewModel : ViewModel() {
         _uiState.value = estado.copy(senha = senha, erroSenha = null, erroGeral = null)
     }
 
-    fun entrar(authState: AuthState, onLoginSuccess: (String) -> Unit) {
+    fun entrar(authState: AuthState, onLoginSuccess: (String) -> Unit, onProfissionalEmAnalise: () -> Unit) {
         val erroEmail = EmailValidator.validar(estado.email)
         val erroSenha = if (estado.senha.isEmpty()) "Informe a senha" else null
         _uiState.value = estado.copy(erroEmail = erroEmail, erroSenha = erroSenha, erroGeral = null)
@@ -36,21 +38,26 @@ class LoginViewModel : ViewModel() {
                 val auth = authState.login(estado.email, estado.senha)
                 _uiState.value = estado.copy(isLoading = false)
                 onLoginSuccess(auth.nivel)
-            } catch (e: Exception) {
-                val msg = if (e.message.isNullOrBlank()) {
-                    "Erro de conexão com o servidor (${e.javaClass.simpleName}). Verifique se o backend está rodando na porta 8080."
+            } catch (e: AuthException) {
+                if (e.codigo == "PROFISSIONAL_EM_ANALISE" || e.codigo == "PROFISSIONAL_RECUSADO") {
+                    _uiState.value = estado.copy(isLoading = false)
+                    onProfissionalEmAnalise()
                 } else {
-                    e.message!!
+                    _uiState.value = estado.copy(
+                        isLoading = false,
+                        erroGeral = ErrorTranslator.traduzir(e.message)
+                    )
                 }
+            } catch (e: Exception) {
                 _uiState.value = estado.copy(
                     isLoading = false,
-                    erroGeral = msg
+                    erroGeral = ErrorTranslator.traduzir(e.message)
                 )
             }
         }
     }
 
     fun entrarComGoogle() {
-        // TODO: integrar Google Sign-In (ApiRotas.Auth.loginGoogle)
+        // TODO: integrar Google Sign-In
     }
 }

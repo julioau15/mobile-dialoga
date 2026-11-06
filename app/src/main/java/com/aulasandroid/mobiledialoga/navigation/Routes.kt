@@ -6,5 +6,6 @@ enum class Rota {
     CADASTRO,
     RECUPERAR_SENHA,
     PACIENTE,
-    PROFISSIONAL
+    PROFISSIONAL,
+    EM_ANALISE
 }
