@@ -5,8 +5,8 @@ package com.aulasandroid.mobiledialoga.data
  * Rotas com parâmetro são funções: ApiRotas.Tarefas.porId(3)
  */
 object ApiRotas {
-    // 10.0.2.2 é o localhost da máquina host visto pelo emulador Android
-    const val BASE_URL = "http://10.0.2.2:8080/v1/dialoga"
+    // Com adb reverse tcp:8080 tcp:8080 ativado, localhost aponta diretamente para o backend no PC
+    const val BASE_URL = "http://localhost:8080/v1/dialoga"
 
     object Auth {
         const val BASE = "/auth"

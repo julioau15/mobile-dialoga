@@ -4,5 +4,7 @@ package com.aulasandroid.mobiledialoga.navigation
 enum class Rota {
     LOGIN,
     CADASTRO,
-    RECUPERAR_SENHA
+    RECUPERAR_SENHA,
+    PACIENTE,
+    PROFISSIONAL
 }

@@ -19,11 +19,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aulasandroid.mobiledialoga.components.DialogaTextLink
+import com.aulasandroid.mobiledialoga.data.useAuth
 import com.aulasandroid.mobiledialoga.feature.auth.login.components.LoginForm
 import com.aulasandroid.mobiledialoga.feature.auth.login.components.LoginHero
 import com.aulasandroid.mobiledialoga.ui.theme.CorFundoLogin
@@ -35,9 +37,11 @@ import com.aulasandroid.mobiledialoga.ui.theme.MobileDialogaTheme
 fun LoginScreen(
     onCadastrar: () -> Unit,
     onEsqueciSenha: () -> Unit,
+    onLoginSuccess: (String) -> Unit,
     viewModel: LoginViewModel = viewModel()
 ) {
     val estado by viewModel.uiState.observeAsState(LoginUiState())
+    val authState = useAuth()
 
     Column(
         modifier = Modifier
@@ -60,13 +64,22 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            if (estado.erroGeral != null) {
+                Text(
+                    text = estado.erroGeral!!,
+                    color = Color.Red,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+            }
+
             LoginForm(
                 estado = estado,
                 onEmailChange = viewModel::onEmailChange,
                 onSenhaChange = viewModel::onSenhaChange,
                 onEsqueciSenha = onEsqueciSenha,
-                onEntrar = viewModel::entrar,
-                onEntrarComGoogle = viewModel::entrarComGoogle,
+                onEntrar = { viewModel.entrar(authState, onLoginSuccess) },
+                onEntrarComGoogle = { viewModel.entrarComGoogle() },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -84,7 +97,6 @@ fun LoginScreen(
                 .padding(vertical = 24.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            // TODO: abrir os documentos quando existirem
             Text(text = "Termos de Uso", color = CorSecundaria, fontSize = 13.sp)
             Text(text = "  |  ", color = CorSecundaria, fontSize = 13.sp)
             Text(text = "Política de Privacidade", color = CorSecundaria, fontSize = 13.sp)
@@ -96,6 +108,6 @@ fun LoginScreen(
 @Composable
 fun LoginScreenPreview() {
     MobileDialogaTheme {
-        LoginScreen(onCadastrar = {}, onEsqueciSenha = {})
+        LoginScreen(onCadastrar = {}, onEsqueciSenha = {}, onLoginSuccess = {})
     }
 }

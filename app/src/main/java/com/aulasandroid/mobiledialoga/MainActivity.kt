@@ -11,6 +11,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.aulasandroid.mobiledialoga.data.AuthProvider
 import com.aulasandroid.mobiledialoga.navigation.AppNavigation
 import com.aulasandroid.mobiledialoga.ui.theme.MobileDialogaTheme
 
@@ -22,9 +23,11 @@ class MainActivity :
         enableEdgeToEdge()
         setContent {
             MobileDialogaTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    MobileDialogaTheme {
-                        AppNavigation()
+                AuthProvider {
+                    Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                        MobileDialogaTheme {
+                            AppNavigation()
+                        }
                     }
                 }
             }
