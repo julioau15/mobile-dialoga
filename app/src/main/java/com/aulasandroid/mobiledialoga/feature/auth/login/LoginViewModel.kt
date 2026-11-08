@@ -45,13 +45,13 @@ class LoginViewModel : ViewModel() {
                 } else {
                     _uiState.value = estado.copy(
                         isLoading = false,
-                        erroGeral = ErrorTranslator.traduzir(e.message)
+                        erroGeral = ErrorTranslator.traduzirLogin(e.message)
                     )
                 }
             } catch (e: Exception) {
                 _uiState.value = estado.copy(
                     isLoading = false,
-                    erroGeral = ErrorTranslator.traduzir(e.message)
+                    erroGeral = ErrorTranslator.traduzirLogin(e.message)
                 )
             }
         }

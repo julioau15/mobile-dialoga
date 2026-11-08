@@ -9,15 +9,15 @@ import com.aulasandroid.mobiledialoga.core.validation.PasswordValidator
 import com.aulasandroid.mobiledialoga.core.validation.PhoneValidator
 import com.aulasandroid.mobiledialoga.data.remote.RetrofitFactory
 import com.google.gson.JsonObject
-import okhttp3.MediaType
+import com.google.gson.JsonParser
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
 /**
- * ViewModel que consome a API utilizando Retrofit com o padrão Call e enqueue,
- * idêntico ao modelo de projeto (android-consumo-api).
+ * ViewModel responsável pelo fluxo de cadastro de Pacientes e Profissionais.
  */
 class CadastroViewModel : ViewModel() {
 
@@ -30,9 +30,6 @@ class CadastroViewModel : ViewModel() {
         carregarEspecialidades()
     }
 
-    /**
-     * Busca a lista de especialidades usando Retrofit e callback enqueue.
-     */
     fun carregarEspecialidades() {
         RetrofitFactory().getEspecialidadeService().listarEspecialidades().enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
@@ -59,13 +56,9 @@ class CadastroViewModel : ViewModel() {
                 }
             }
 
-            override fun onFailure(call: Call<JsonObject>, t: Throwable) {
-                // Falha de rede ao carregar especialidades
-            }
+            override fun onFailure(call: Call<JsonObject>, t: Throwable) {}
         })
     }
-
-    // ---------- Etapa 1: Dados Pessoais ----------
 
     fun onTipoContaChange(tipo: TipoConta) {
         _uiState.value = estado.copy(tipoConta = tipo, erroEspecialidade = null, erroCpf = null, erroCrp = null, erroGeral = null)
@@ -127,7 +120,6 @@ class CadastroViewModel : ViewModel() {
             return
         }
 
-        // Verifica no backend se e-mail, celular, CPF ou CRP já estão cadastrados
         _uiState.value = validado.copy(isLoading = true, erroGeral = null)
 
         val cpfArg = if (atual.tipoConta == TipoConta.PROFISSIONAL) atual.cpf else null
@@ -140,14 +132,29 @@ class CadastroViewModel : ViewModel() {
             crp = crpArg
         ).enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
-                val json = response.body()
-                if (response.isSuccessful && (json?.get("status")?.asBoolean == true)) {
-                    // Disponível! Avança para a etapa de senha
+                val json = if (response.isSuccessful) {
+                    response.body()
+                } else {
+                    val errorStr = response.errorBody()?.string()
+                    if (!errorStr.isNullOrBlank()) {
+                        try { JsonParser().parse(errorStr).asJsonObject } catch (e: Exception) { null }
+                    } else null
+                }
+
+                val isOk = response.isSuccessful || (json?.has("status") == true && json.get("status").asBoolean)
+
+                if (isOk) {
                     _uiState.value = estado.copy(isLoading = false, etapa = EtapaCadastro.SENHA, erroGeral = null)
                 } else {
-                    val rawMsg = json?.get("message")?.asString
-                    val msg = ErrorTranslator.traduzir(rawMsg)
-                    val lowerMsg = (rawMsg ?: "").lowercase()
+                    val rawMsg = if (json != null && json.has("message")) {
+                        json.get("message").asString
+                    } else if (json != null && json.has("erro")) {
+                        json.get("erro").asString
+                    } else {
+                        "Os dados informados já estão cadastrados no sistema."
+                    }
+                    val msg = ErrorTranslator.traduzirCadastro(rawMsg)
+                    val lowerMsg = rawMsg.lowercase()
                     val erroEmail = if (lowerMsg.contains("e-mail") || lowerMsg.contains("email")) msg else null
                     val erroCelular = if (lowerMsg.contains("celular")) msg else null
                     val erroCpf = if (lowerMsg.contains("cpf")) msg else null
@@ -165,15 +172,10 @@ class CadastroViewModel : ViewModel() {
             }
 
             override fun onFailure(call: Call<JsonObject>, t: Throwable) {
-                _uiState.value = estado.copy(
-                    isLoading = false,
-                    erroGeral = ErrorTranslator.traduzir(t.message)
-                )
+                _uiState.value = estado.copy(isLoading = false, etapa = EtapaCadastro.SENHA, erroGeral = null)
             }
         })
     }
-
-    // ---------- Etapa 2: Senha ----------
 
     fun onSenhaChange(senha: String) {
         _uiState.value = estado.copy(senha = senha, erroSenha = null, erroGeral = null)
@@ -184,8 +186,7 @@ class CadastroViewModel : ViewModel() {
     }
 
     /**
-     * Realiza o cadastro de Paciente ou Profissional utilizando Retrofit e enqueue,
-     * exatamente como no modelo android-consumo-api.
+     * Realiza o cadastro enviando Multipart RequestBody para a API (exatamente como o backend espera).
      */
     fun criarConta(onPacienteCadastrado: () -> Unit) {
         val atual = estado
@@ -196,7 +197,7 @@ class CadastroViewModel : ViewModel() {
 
         _uiState.value = estado.copy(isLoading = true, erroGeral = null)
 
-        val mediaType = MediaType.parse("text/plain")
+        val mediaType = "text/plain".toMediaTypeOrNull()
 
         if (atual.tipoConta == TipoConta.PACIENTE) {
             val nomeBody = RequestBody.create(mediaType, atual.nome)
@@ -207,13 +208,22 @@ class CadastroViewModel : ViewModel() {
             RetrofitFactory().getPacienteService().cadastrarPaciente(nomeBody, emailBody, celularBody, senhaBody)
                 .enqueue(object : Callback<JsonObject> {
                     override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
-                        val json = response.body()
-                        if (response.isSuccessful && (json?.get("status")?.asBoolean == true)) {
+                        val json = if (response.isSuccessful) {
+                            response.body()
+                        } else {
+                            val errorStr = response.errorBody()?.string()
+                            if (!errorStr.isNullOrBlank()) {
+                                try { JsonParser().parse(errorStr).asJsonObject } catch (e: Exception) { null }
+                            } else null
+                        }
+
+                        val isSuccess = response.isSuccessful || (json?.has("status") == true && json.get("status").asBoolean)
+                        if (isSuccess) {
                             reiniciar()
                             onPacienteCadastrado()
                         } else {
-                            val rawMsg = json?.get("message")?.asString
-                            val msg = ErrorTranslator.traduzir(rawMsg)
+                            val rawMsg = json?.get("message")?.asString ?: json?.get("erro")?.asString
+                            val msg = ErrorTranslator.traduzirCadastro(rawMsg)
                             _uiState.value = estado.copy(isLoading = false, erroGeral = msg)
                         }
                     }
@@ -221,7 +231,7 @@ class CadastroViewModel : ViewModel() {
                     override fun onFailure(call: Call<JsonObject>, t: Throwable) {
                         _uiState.value = estado.copy(
                             isLoading = false,
-                            erroGeral = ErrorTranslator.traduzir(t.message)
+                            erroGeral = ErrorTranslator.traduzirCadastro(t.message)
                         )
                     }
                 })
@@ -240,12 +250,21 @@ class CadastroViewModel : ViewModel() {
                 nomeBody, emailBody, celularBody, senhaBody, cpfBody, crpBody, instBody, espBody
             ).enqueue(object : Callback<JsonObject> {
                 override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
-                    val json = response.body()
-                    if (response.isSuccessful && (json?.get("status")?.asBoolean == true)) {
+                    val json = if (response.isSuccessful) {
+                        response.body()
+                    } else {
+                        val errorStr = response.errorBody()?.string()
+                        if (!errorStr.isNullOrBlank()) {
+                            try { JsonParser().parse(errorStr).asJsonObject } catch (e: Exception) { null }
+                        } else null
+                    }
+
+                    val isSuccess = response.isSuccessful || (json?.has("status") == true && json.get("status").asBoolean)
+                    if (isSuccess) {
                         _uiState.value = estado.copy(isLoading = false, etapa = EtapaCadastro.EM_ANALISE)
                     } else {
-                        val rawMsg = json?.get("message")?.asString
-                        val msg = ErrorTranslator.traduzir(rawMsg)
+                        val rawMsg = json?.get("message")?.asString ?: json?.get("erro")?.asString
+                        val msg = ErrorTranslator.traduzirCadastro(rawMsg)
                         _uiState.value = estado.copy(isLoading = false, erroGeral = msg)
                     }
                 }
@@ -253,14 +272,12 @@ class CadastroViewModel : ViewModel() {
                 override fun onFailure(call: Call<JsonObject>, t: Throwable) {
                     _uiState.value = estado.copy(
                         isLoading = false,
-                        erroGeral = ErrorTranslator.traduzir(t.message)
+                        erroGeral = ErrorTranslator.traduzirCadastro(t.message)
                     )
                 }
             })
         }
     }
-
-    // ---------- Navegação entre Etapas ----------
 
     fun voltar(): Boolean {
         if (estado.etapa != EtapaCadastro.SENHA) return false

@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aulasandroid.mobiledialoga.components.DialogaTextLink
 import com.aulasandroid.mobiledialoga.data.useAuth
+import com.aulasandroid.mobiledialoga.feature.auth.admin.AdminBlockedScreen
 import com.aulasandroid.mobiledialoga.feature.auth.cadastro.CadastroScreen
 import com.aulasandroid.mobiledialoga.feature.auth.cadastro.CadastroViewModel
 import com.aulasandroid.mobiledialoga.feature.auth.cadastro.components.PerfilEmAnalise
@@ -43,9 +44,17 @@ fun AppNavigation() {
     }
 
     if (auth != null) {
-        // Se estiver autenticado, exibe a tela correspondente ao nível do usuário
-        // Nivel 1 = Profissional, Nivel 2 = Paciente
-        if (auth.nivel == "1" || auth.nivel == "1.0") {
+        val nivel = auth.nivel.trim().lowercase()
+        val isAdmin = nivel == "0" || nivel == "0.0" || nivel == "3" || nivel == "3.0" || nivel.contains("admin")
+
+        if (isAdmin) {
+            AdminBlockedScreen(
+                onVoltarParaLogin = {
+                    authState.logout()
+                    irParaLogin()
+                }
+            )
+        } else if (nivel == "1" || nivel == "1.0" || nivel == "profissional") {
             ProfissionalScreen(onLogout = irParaLogin)
         } else {
             PacienteScreen(onLogout = irParaLogin)
@@ -90,11 +99,17 @@ fun AppNavigation() {
             }
         }
 
-        else -> LoginScreen(
-            onCadastrar = { rota = Rota.CADASTRO },
-            onEsqueciSenha = { rota = Rota.RECUPERAR_SENHA },
-            onLoginSuccess = {},
-            onProfissionalEmAnalise = { rota = Rota.EM_ANALISE }
-        )
+        Rota.ADMIN_BLOQUEADO -> {
+            AdminBlockedScreen(
+                onVoltarParaLogin = {
+                    authState.logout()
+                    irParaLogin()
+                }
+            )
+        }
+
+        Rota.PACIENTE -> PacienteScreen(onLogout = irParaLogin)
+
+        Rota.PROFISSIONAL -> ProfissionalScreen(onLogout = irParaLogin)
     }
 }

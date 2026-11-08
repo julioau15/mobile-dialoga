@@ -7,5 +7,6 @@ enum class Rota {
     RECUPERAR_SENHA,
     PACIENTE,
     PROFISSIONAL,
-    EM_ANALISE
+    EM_ANALISE,
+    ADMIN_BLOQUEADO
 }
