@@ -25,6 +25,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aulasandroid.mobiledialoga.R
+import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.RotuloCampo
 import com.aulasandroid.mobiledialoga.ui.theme.CorBorda
 import com.aulasandroid.mobiledialoga.ui.theme.CorBranco
 import com.aulasandroid.mobiledialoga.ui.theme.CorErro

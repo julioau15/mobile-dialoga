@@ -7,7 +7,8 @@ data class UserProfile(
     val nome: String? = null,
     val apelido: String? = null,
     val email: String? = null,
-    val foto: String? = null
+    val foto: String? = null,
+    val primeiroAcesso: Boolean = false
 ) {
     /**
      * Retorna o nome de exibição:

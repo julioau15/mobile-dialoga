@@ -10,18 +10,18 @@ val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
-// Cores do Dialoga (tiradas do protótipo)
+// Cores do Dialoga
 val CorPrimaria = Color(0xFF7B4FA6)
 val CorPrimariaClara = Color(0xFFF3EDF9)
 val CorFundo = Color(0xFFF5F0FF)
 val CorFundoLogin = Color(0xFFFDFCFF)
 val CorBranco = Color(0xFFFFFFFF)
-val CorTexto = Color(0xFF2D1B45)
-val CorSecundaria = Color(0xFF7C6B8A)
+val CorTexto = Color(0xFF1A0F2B) // Escurecido de 2D1B45
+val CorSecundaria = Color(0xFF4A4458) // Escurecido de 7C6B8A (mais legível para placeholders e textos suaves)
 val CorBorda = Color(0xFFE8DFF0)
 val CorBordaCard = Color(0xFFE4DFED)
 val CorEtapaInativa = Color(0xFFF0E9F9)
-val CorEtapaInativaTexto = Color(0xFFC5BBD0)
+val CorEtapaInativaTexto = Color(0xFF8A8098) // Escurecido de C5BBD0
 val CorEtapaConcluida = Color(0xFF95CCC3)
 val CorSucesso = Color(0xFF059669)
 val CorSucessoClara = Color(0xFFECFDF5)

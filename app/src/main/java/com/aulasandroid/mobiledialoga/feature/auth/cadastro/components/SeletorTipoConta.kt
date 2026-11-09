@@ -18,7 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aulasandroid.mobiledialoga.components.RotuloCampo
+import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.RotuloCampo
 import com.aulasandroid.mobiledialoga.feature.auth.cadastro.TipoConta
 import com.aulasandroid.mobiledialoga.ui.theme.CorBorda
 import com.aulasandroid.mobiledialoga.ui.theme.CorBranco

@@ -8,6 +8,8 @@ import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
+import retrofit2.http.Path
+import retrofit2.http.Query
 
 interface ProfissionalService {
     @Multipart
@@ -25,4 +27,19 @@ interface ProfissionalService {
 
     @GET("profissionais/me")
     fun getPerfilProfissional(@Header("x-access-token") token: String): Call<JsonObject>
+
+    @POST("profissionais/me/primeiro-acesso")
+    fun concluirPrimeiroAcesso(@Header("x-access-token") token: String): Call<JsonObject>
+
+    @GET("profissionais/busca")
+    fun buscarProfissionais(
+        @Header("x-access-token") token: String?,
+        @Query("q") query: String
+    ): Call<JsonObject>
+
+    @POST("profissionais/me/pacientes/{id}")
+    fun vincularPaciente(
+        @Header("x-access-token") token: String,
+        @Path("id") idPaciente: String
+    ): Call<JsonObject>
 }
