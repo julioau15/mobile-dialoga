@@ -14,4 +14,11 @@ class RetrofitFactory {
     fun getEspecialidadeService(): EspecialidadeService = retrofit.create(EspecialidadeService::class.java)
     fun getPacienteService(): PacienteService = retrofit.create(PacienteService::class.java)
     fun getProfissionalService(): ProfissionalService = retrofit.create(ProfissionalService::class.java)
+    fun getTarefaService(): TarefaService = retrofit.create(TarefaService::class.java)
+    fun getConsultaService(): ConsultaService = retrofit.create(ConsultaService::class.java)
+    fun getTratamentoService(): TratamentoService = retrofit.create(TratamentoService::class.java)
+    fun getNotificacaoService(): NotificacaoService = retrofit.create(NotificacaoService::class.java)
+    fun getRegistroHumorService(): RegistroHumorService = retrofit.create(RegistroHumorService::class.java)
+    fun getAnotacaoService(): AnotacaoService = retrofit.create(AnotacaoService::class.java)
+    fun getSolicitacaoAcessoService(): SolicitacaoAcessoService = retrofit.create(SolicitacaoAcessoService::class.java)
 }
