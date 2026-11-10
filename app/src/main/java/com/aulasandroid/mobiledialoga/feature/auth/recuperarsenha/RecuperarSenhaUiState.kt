@@ -16,5 +16,7 @@ data class RecuperarSenhaUiState(
     val erroEmail: String? = null,
     val erroCodigo: String? = null,
     val erroSenha: String? = null,
-    val erroConfirmacao: String? = null
+    val erroConfirmacao: String? = null,
+    val isLoading: Boolean = false,
+    val erroGeral: String? = null
 )

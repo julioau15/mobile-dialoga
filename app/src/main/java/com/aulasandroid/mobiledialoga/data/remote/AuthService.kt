@@ -20,4 +20,16 @@ interface AuthService {
         @Query("cpf") cpf: String? = null,
         @Query("crp") crp: String? = null
     ): Call<JsonObject>
+
+    @Headers("Content-Type: application/json")
+    @POST("auth/recuperar-senha/solicitar")
+    fun solicitarRecuperarSenha(@Body body: JsonObject): Call<JsonObject>
+
+    @Headers("Content-Type: application/json")
+    @POST("auth/recuperar-senha/validar-codigo")
+    fun validarCodigoRecuperacao(@Body body: JsonObject): Call<JsonObject>
+
+    @Headers("Content-Type: application/json")
+    @POST("auth/recuperar-senha/redefinir")
+    fun redefinirSenha(@Body body: JsonObject): Call<JsonObject>
 }

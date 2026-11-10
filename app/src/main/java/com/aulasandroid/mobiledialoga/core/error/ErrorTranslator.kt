@@ -23,7 +23,8 @@ object ErrorTranslator {
                 "Sua conta está indisponível ou foi recusada. Entre em contato com o suporte."
 
             lower.contains("incorret") || lower.contains("inválid") || lower.contains("invalid") ||
-            lower.contains("não encontrad") || lower.contains("nao encontrad") || lower.contains("senha") || lower.contains("email") ->
+            lower.contains("não encontrad") || lower.contains("nao encontrad") || lower.contains("senha") || lower.contains("email") ||
+            lower.contains("unauthorized") || lower.contains("não autorizado") || lower.contains("nao autorizado") || lower.contains("401") || lower.contains("403") || lower.contains("credencial") ->
                 "E-mail ou senha incorretos."
 
             else ->
@@ -32,8 +33,28 @@ object ErrorTranslator {
     }
 
     /**
-     * Traduz erros exclusivos da tela de Cadastro.
+     * Traduz erros exclusivos da tela de Redefinição de Senha.
      */
+    fun traduzirRecuperacaoSenha(mensagemBackend: String?): String {
+        if (mensagemBackend.isNullOrBlank()) {
+            return "Código inválido ou expirado."
+        }
+        val lower = mensagemBackend.lowercase()
+        return when {
+            lower.contains("conexão") || lower.contains("connect") || lower.contains("timeout") ||
+            lower.contains("unable to resolve host") || lower.contains("failed to connect") ->
+                "Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente."
+
+            lower.contains("código") || lower.contains("codigo") || lower.contains("inválid") ||
+            lower.contains("invalid") || lower.contains("incorret") || lower.contains("expirado") ||
+            lower.contains("dados enviados") || lower.contains("requisição") || lower.contains("nao estao corretos") ||
+            lower.contains("não estão corretos") ->
+                "Código inválido ou expirado."
+
+            else ->
+                mensagemBackend
+        }
+    }
     fun traduzirCadastro(mensagemBackend: String?): String {
         if (mensagemBackend.isNullOrBlank()) {
             return "Não foi possível concluir o cadastro. Verifique seus dados e tente novamente."
