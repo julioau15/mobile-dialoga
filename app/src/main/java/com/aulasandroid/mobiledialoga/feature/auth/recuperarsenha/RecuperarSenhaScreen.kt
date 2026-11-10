@@ -35,7 +35,8 @@ fun RecuperarSenhaScreen(
                 erroEmail = estado.erroEmail,
                 onEmailChange = viewModel::onEmailChange,
                 onVoltar = onIrParaLogin,
-                onEnviarCodigo = viewModel::enviarCodigo
+                onEnviarCodigo = viewModel::enviarCodigo,
+                isLoading = estado.isLoading
             )
 
             EtapaRecuperacao.CODIGO -> ValidarCodigoForm(
@@ -43,14 +44,16 @@ fun RecuperarSenhaScreen(
                 erroCodigo = estado.erroCodigo,
                 onCodigoChange = viewModel::onCodigoChange,
                 onRedefinirSenha = viewModel::validarCodigo,
-                onReenviar = viewModel::reenviarCodigo
+                onReenviar = viewModel::reenviarCodigo,
+                isLoading = estado.isLoading
             )
 
             EtapaRecuperacao.NOVA_SENHA -> NovaSenhaForm(
                 estado = estado,
                 onSenhaChange = viewModel::onSenhaChange,
                 onConfirmacaoChange = viewModel::onConfirmacaoChange,
-                onSalvar = { viewModel.salvar(onSenhaRedefinida = onIrParaLogin) }
+                onSalvar = { viewModel.salvar(onSenhaRedefinida = onIrParaLogin) },
+                isLoading = estado.isLoading
             )
         }
     }

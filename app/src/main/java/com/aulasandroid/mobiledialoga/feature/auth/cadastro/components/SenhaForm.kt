@@ -41,7 +41,7 @@ fun SenhaForm(
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
             DialogaOutlinedButton(texto = "Voltar", onClick = onVoltar, modifier = Modifier.weight(1f))
-            DialogaButton(texto = "Criar conta", onClick = onCriarConta, modifier = Modifier.weight(1f))
+            DialogaButton(texto = "Criar conta", onClick = onCriarConta, isLoading = estado.isLoading, modifier = Modifier.weight(1f))
         }
     }
 }

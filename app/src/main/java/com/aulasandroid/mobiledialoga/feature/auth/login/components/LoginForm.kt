@@ -71,7 +71,12 @@ fun LoginForm(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        DialogaButton(texto = "Entrar", onClick = onEntrar, modifier = Modifier.fillMaxWidth())
+        DialogaButton(
+            texto = "Entrar",
+            onClick = onEntrar,
+            isLoading = estado.isLoading,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(modifier = Modifier.height(20.dp))
 

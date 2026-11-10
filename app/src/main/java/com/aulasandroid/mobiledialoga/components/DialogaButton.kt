@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,11 +35,12 @@ fun DialogaButton(
     texto: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    isLoading: Boolean = false
 ) {
     Button(
         onClick = onClick,
-        enabled = enabled,
+        enabled = enabled && !isLoading,
         shape = FormatoBotao,
         colors = ButtonDefaults.buttonColors(
             containerColor = CorPrimaria,
@@ -48,9 +50,17 @@ fun DialogaButton(
         ),
         modifier = modifier
             .height(46.dp)
-            .shadow(if (enabled) 4.dp else 0.dp, FormatoBotao, ambientColor = CorPrimaria, spotColor = CorPrimaria)
+            .shadow(if (enabled && !isLoading) 4.dp else 0.dp, FormatoBotao, ambientColor = CorPrimaria, spotColor = CorPrimaria)
     ) {
-        Text(text = texto, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = CorBranco,
+                strokeWidth = 2.dp
+            )
+        } else {
+            Text(text = texto, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
     }
 }
 

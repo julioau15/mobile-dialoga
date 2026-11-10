@@ -37,6 +37,7 @@ fun ValidarCodigoForm(
     onCodigoChange: (String) -> Unit,
     onRedefinirSenha: () -> Unit,
     onReenviar: () -> Unit,
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     DialogaCard(modifier = modifier) {
@@ -92,7 +93,7 @@ fun ValidarCodigoForm(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        DialogaButton(texto = "Redefinir senha", onClick = onRedefinirSenha, modifier = Modifier.fillMaxWidth())
+        DialogaButton(texto = "Redefinir senha", onClick = onRedefinirSenha, isLoading = isLoading, modifier = Modifier.fillMaxWidth())
 
         Spacer(modifier = Modifier.height(16.dp))
 

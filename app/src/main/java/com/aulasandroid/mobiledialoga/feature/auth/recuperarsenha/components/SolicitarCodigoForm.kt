@@ -31,6 +31,7 @@ fun SolicitarCodigoForm(
     onEmailChange: (String) -> Unit,
     onVoltar: () -> Unit,
     onEnviarCodigo: () -> Unit,
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     DialogaCard(modifier = modifier) {
@@ -74,6 +75,6 @@ fun SolicitarCodigoForm(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        DialogaButton(texto = "Enviar código", onClick = onEnviarCodigo, modifier = Modifier.fillMaxWidth())
+        DialogaButton(texto = "Enviar código", onClick = onEnviarCodigo, isLoading = isLoading, modifier = Modifier.fillMaxWidth())
     }
 }

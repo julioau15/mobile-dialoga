@@ -18,6 +18,7 @@ fun NovaSenhaForm(
     onSenhaChange: (String) -> Unit,
     onConfirmacaoChange: (String) -> Unit,
     onSalvar: () -> Unit,
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     DialogaCard(modifier = modifier) {
@@ -34,6 +35,6 @@ fun NovaSenhaForm(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        DialogaButton(texto = "Salvar", onClick = onSalvar, modifier = Modifier.fillMaxWidth())
+        DialogaButton(texto = "Salvar", onClick = onSalvar, isLoading = isLoading, modifier = Modifier.fillMaxWidth())
     }
 }
