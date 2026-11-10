@@ -4,13 +4,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aulasandroid.mobiledialoga.R
 import com.aulasandroid.mobiledialoga.components.DialogaLayout
 import com.aulasandroid.mobiledialoga.components.DialogaMenuItem
 import com.aulasandroid.mobiledialoga.data.useAuth
 import com.aulasandroid.mobiledialoga.feature.paciente.consultas.ConsultasPacienteScreen
+import com.aulasandroid.mobiledialoga.feature.paciente.home.PacienteDashboardViewModel
 import com.aulasandroid.mobiledialoga.feature.paciente.home.PacienteHomeScreen
-import com.aulasandroid.mobiledialoga.feature.paciente.humor.RegistroHumorScreen
+import com.aulasandroid.mobiledialoga.feature.paciente.humor.RegistroHumorDialog
 import com.aulasandroid.mobiledialoga.feature.paciente.notificacoes.NotificacoesPacienteScreen
 import com.aulasandroid.mobiledialoga.feature.paciente.perfil.PerfilPacienteScreen
 import com.aulasandroid.mobiledialoga.feature.paciente.profissionais.BuscaProfissionaisScreen
@@ -33,9 +35,10 @@ enum class PacienteSubRota(val titulo: String) {
 @Composable
 fun PacienteScreen(onLogout: () -> Unit) {
     val authState = useAuth()
+    // Mesmo ViewModel para o dashboard e para o modal de humor (salvar -> recarregar)
+    val dashboardViewModel: PacienteDashboardViewModel = viewModel()
     var subRotaAtual by rememberSaveable { mutableStateOf(PacienteSubRota.DASHBOARD) }
 
-    // Busca as informações atualizadas do usuário da API (/pacientes/me) ao carregar a tela
     LaunchedEffect(Unit) {
         authState.carregarPerfilMeu()
     }
@@ -58,7 +61,10 @@ fun PacienteScreen(onLogout: () -> Unit) {
         )
     }
 
-    val itemSelecionadoId = when (subRotaAtual) {
+    // O modal de humor abre por cima do dashboard, então título e menu continuam em "Dashboard".
+    val rotaVisivel = if (subRotaAtual == PacienteSubRota.HUMOR) PacienteSubRota.DASHBOARD else subRotaAtual
+
+    val itemSelecionadoId = when (rotaVisivel) {
         PacienteSubRota.DASHBOARD -> "dashboard"
         PacienteSubRota.RELATORIOS -> "relatorios"
         PacienteSubRota.TRATAMENTO -> "tratamento"
@@ -67,11 +73,11 @@ fun PacienteScreen(onLogout: () -> Unit) {
         PacienteSubRota.TAREFAS -> "tarefas"
         PacienteSubRota.NOTIFICACOES -> "notificacoes"
         PacienteSubRota.PERFIL -> "perfil"
-        PacienteSubRota.HUMOR -> "humor"
+        PacienteSubRota.HUMOR -> "dashboard"
     }
 
     DialogaLayout(
-        tituloTela = subRotaAtual.titulo,
+        tituloTela = rotaVisivel.titulo,
         nomeUsuario = nomeExibicao,
         iniciaisUsuario = iniciais,
         fotoUrl = fotoUrl,
@@ -87,7 +93,6 @@ fun PacienteScreen(onLogout: () -> Unit) {
                 "tarefas" -> PacienteSubRota.TAREFAS
                 "notificacoes" -> PacienteSubRota.NOTIFICACOES
                 "perfil" -> PacienteSubRota.PERFIL
-                "humor" -> PacienteSubRota.HUMOR
                 else -> PacienteSubRota.DASHBOARD
             }
         },
@@ -97,8 +102,12 @@ fun PacienteScreen(onLogout: () -> Unit) {
         }
     ) { innerPadding ->
         val modifier = Modifier.padding(innerPadding)
-        when (subRotaAtual) {
-            PacienteSubRota.DASHBOARD -> PacienteHomeScreen(modifier = modifier)
+        when (rotaVisivel) {
+            PacienteSubRota.DASHBOARD, PacienteSubRota.HUMOR -> PacienteHomeScreen(
+                onNavigate = { subRotaAtual = it },
+                modifier = modifier,
+                viewModel = dashboardViewModel
+            )
             PacienteSubRota.RELATORIOS -> RelatoriosPacienteScreen(modifier = modifier)
             PacienteSubRota.TRATAMENTO -> TratamentoScreen(modifier = modifier)
             PacienteSubRota.AGENDA -> ConsultasPacienteScreen(modifier = modifier)
@@ -106,7 +115,22 @@ fun PacienteScreen(onLogout: () -> Unit) {
             PacienteSubRota.TAREFAS -> TarefasPacienteScreen(modifier = modifier)
             PacienteSubRota.NOTIFICACOES -> NotificacoesPacienteScreen(modifier = modifier)
             PacienteSubRota.PERFIL -> PerfilPacienteScreen(modifier = modifier)
-            PacienteSubRota.HUMOR -> RegistroHumorScreen(modifier = modifier)
+        }
+
+        if (subRotaAtual == PacienteSubRota.HUMOR) {
+            RegistroHumorDialog(
+                salvando = dashboardViewModel.salvandoHumor,
+                erro = dashboardViewModel.erroHumor,
+                onCancelar = {
+                    dashboardViewModel.limparErroHumor()
+                    subRotaAtual = PacienteSubRota.DASHBOARD
+                },
+                onSalvar = { dados ->
+                    dashboardViewModel.registrarHumor(authState, dados) {
+                        subRotaAtual = PacienteSubRota.DASHBOARD
+                    }
+                }
+            )
         }
     }
 }

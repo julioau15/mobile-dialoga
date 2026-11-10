@@ -228,7 +228,7 @@ class AuthState(private val context: Context) {
     suspend fun buscarPacientes(query: String): List<PessoaSugestao> = withContext(Dispatchers.IO) {
         try {
             val token = auth?.token
-            val response = RetrofitFactory().getPacienteService().buscarPacientes(token, query, query).execute()
+            val response = RetrofitFactory().getPacienteService().buscarPacientes(token, query).execute()
             if (response.isSuccessful) {
                 val json = response.body()
                 val pacientes = findArray(json, "pacientes", "response", "dados", "data")

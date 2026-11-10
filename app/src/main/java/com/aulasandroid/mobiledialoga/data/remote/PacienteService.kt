@@ -6,6 +6,7 @@ import retrofit2.Call
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Headers
 import retrofit2.http.Multipart
 import retrofit2.http.POST
 import retrofit2.http.Part
@@ -37,16 +38,34 @@ interface PacienteService {
         @Path("id") idProfissional: String
     ): Call<JsonObject>
 
+    // O back só aceita Content-Type exatamente "application/json" (sem "; charset=UTF-8").
+    @Headers("Content-Type: application/json")
     @POST("pacientes/me/registros-humor")
     fun registrarHumor(
         @Header("x-access-token") token: String,
-        @Body dados: JsonObject
+        @Body corpo: JsonObject
     ): Call<JsonObject>
+
+    @GET("pacientes/me/registros-humor")
+    fun getMeusRegistrosHumor(@Header("x-access-token") token: String): Call<JsonObject>
+
+    @GET("pacientes/me/tratamentos")
+    fun getMeusTratamentos(@Header("x-access-token") token: String): Call<JsonObject>
+
+    @GET("pacientes/me/profissionais")
+    fun getMeusProfissionais(@Header("x-access-token") token: String): Call<JsonObject>
 
     @GET("pacientes/busca")
     fun buscarPacientes(
         @Header("x-access-token") token: String?,
-        @Query("q") query: String,
-        @Query("busca") busca: String = query
+        @Query("q") query: String
     ): Call<JsonObject>
+
+    // Endpoints genéricos que o paciente consome
+    @GET("tarefas")
+    fun getMinhasTarefas(@Header("x-access-token") token: String): Call<JsonObject>
+
+    // Trocar por "pacientes/me/consultas" depois de criar a rota no back (ver correcoes-backend.md, item 3).
+    @GET("consultas")
+    fun getMinhasConsultas(@Header("x-access-token") token: String): Call<JsonObject>
 }

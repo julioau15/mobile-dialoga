@@ -1,13 +1,10 @@
 package com.aulasandroid.mobiledialoga.feature.paciente.primeiroacesso
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -21,7 +18,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -29,6 +25,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.aulasandroid.mobiledialoga.R
+import com.aulasandroid.mobiledialoga.feature.paciente.humor.FormularioHumor
+import com.aulasandroid.mobiledialoga.feature.paciente.humor.rememberHumorFormState
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.BotaoPrimario
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.BotaoTexto
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.BuscaPessoa
@@ -38,7 +36,6 @@ import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.CartaoAv
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.DataVisualTransformation
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.DialogoVinculo
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.EscolhaBinaria
-import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.GrupoDeChips
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.PessoaSugestao
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.PrimeiroAcessoLayout
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.RosaBorda
@@ -57,6 +54,8 @@ private val PessoaSugestaoSaver = listSaver<PessoaSugestao?, String>(
     save = { p -> if (p == null) emptyList() else listOf(p.id, p.nome, p.detalhe) },
     restore = { l -> if (l.size == 3) PessoaSugestao(id = l[0], nome = l[1], detalhe = l[2]) else null }
 )
+
+private val ROTULOS_ETAPAS = listOf("Pessoal", "Profissional", "Humor")
 
 /**
  * Primeiro acesso do paciente.
@@ -85,13 +84,8 @@ fun PrimeiroAcessoPacienteScreen(
     }
     var mostrarDialogo by rememberSaveable { mutableStateOf(false) }
 
-    // Dados da Etapa 3
-    var sentimento by rememberSaveable { mutableStateOf<String?>(null) }
-    var energia by rememberSaveable { mutableStateOf<String?>(null) }
-    var humor by rememberSaveable { mutableStateOf<String?>(null) }
-    var horasSono by rememberSaveable { mutableStateOf("") }
-    var relato by rememberSaveable { mutableStateOf("") }
-    var pensamentoSelecionado by rememberSaveable { mutableStateOf<String?>(null) }
+    // Dados da Etapa 3 (Humor) - Centralizado na pasta humor
+    val humorState = rememberHumorFormState()
 
     // Busca de profissional com debounce
     LaunchedEffect(buscaText) {
@@ -116,26 +110,17 @@ fun PrimeiroAcessoPacienteScreen(
         val dados = JsonObject().apply {
             addProperty("apelido", apelido.trim().ifBlank { null })
             addProperty("data_nascimento", dataDigitosParaIso(nascimento))
-            // Só envia o profissional se o usuário realmente escolheu "Sim"
             addProperty(
                 "id_profissional",
                 if (temProfissional == true) profissionalSelecionado?.id else null
             )
-
-            val humorObj = JsonObject().apply {
-                addProperty("sentimento", sentimento)
-                addProperty("energia", energia)
-                addProperty("humor", humor)
-                addProperty("horas_sono", horasSono.replace(',', '.').toDoubleOrNull())
-                addProperty("relato", relato.trim().ifBlank { null })
-                addProperty("pensamento", pensamentoSelecionado)
-            }
-            add("registro_humor", humorObj)
+            // Usa o método do estado do humor para gerar o JSON
+            add("registro_humor", humorState.toJsonObject())
         }
         onFinalizar(dados)
     }
 
-    PrimeiroAcessoLayout(rotulos = listOf("Pessoal", "Profissional", "Humor"), etapaAtual = etapa) {
+    PrimeiroAcessoLayout(rotulos = ROTULOS_ETAPAS, etapaAtual = etapa) {
         when (etapa) {
             1 -> {
                 Cabecalho(
@@ -147,7 +132,7 @@ fun PrimeiroAcessoPacienteScreen(
                 RotuloCampo(texto = "Como devemos chamar você?", opcional = true)
                 CampoDeTexto(
                     valor = apelido,
-                    onValorChange = { text -> apelido = text },
+                    onValorChange = { apelido = it },
                     placeholder = "Digite como prefere ser chamado",
                     icone = Icons.Default.Person
                 )
@@ -166,7 +151,7 @@ fun PrimeiroAcessoPacienteScreen(
                 CampoDeTexto(
                     valor = nascimento,
                     onValorChange = { nova ->
-                        nascimento = nova.filter { char -> char.isDigit() }.take(8)
+                        nascimento = nova.filter { it.isDigit() }.take(8)
                         nascimentoErro = null
                     },
                     placeholder = "dd/mm/aaaa",
@@ -177,7 +162,6 @@ fun PrimeiroAcessoPacienteScreen(
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
-                // Ativo quando o apelido E a data de nascimento válida (8 dígitos) forem preenchidos
                 val podeContinuar1 = apelido.trim().isNotBlank() && nascimento.length == 8 && dataDigitosParaIso(nascimento) != null
                 BotaoPrimario(
                     texto = "Continuar →",
@@ -191,7 +175,6 @@ fun PrimeiroAcessoPacienteScreen(
                         }
                     }
                 )
-
                 BotaoTexto(texto = "Pular por enquanto", onClick = { etapa = 2 })
             }
 
@@ -239,17 +222,24 @@ fun PrimeiroAcessoPacienteScreen(
                     )
                 } else if (temProfissional == false) {
                     CartaoAviso(fundo = RosaFundo, borda = RosaBorda) {
-                        Text(text = "Tudo bem! 💜", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextoTitulo)
+                        Text(
+                            text = "Tudo bem! 💜",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextoTitulo
+                        )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = textoComNegrito("Você pode adicionar um profissional a qualquer momento pelo menu ", "Profissionais", "."),
-                            fontSize = 13.sp, color = TextoSuave, textAlign = TextAlign.Center, lineHeight = 18.sp
+                            fontSize = 13.sp,
+                            color = TextoSuave,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 18.sp
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
-                // Sem resposta (null) = desativado; "Sim" exige profissional selecionado
                 val podeContinuar = when (temProfissional) {
                     null -> false
                     true -> profissionalSelecionado != null
@@ -266,10 +256,7 @@ fun PrimeiroAcessoPacienteScreen(
                         }
                     }
                 )
-                BotaoTexto(texto = "Pular por enquanto", onClick = {
-                    profissionalSelecionado = null
-                    etapa = 3
-                })
+                BotaoTexto(texto = "Pular por enquanto", onClick = { etapa = 3 })
                 BotaoTexto(texto = "← Voltar", onClick = { etapa = 1 })
             }
 
@@ -280,55 +267,13 @@ fun PrimeiroAcessoPacienteScreen(
                     descricao = "Registre como está se sentindo neste momento."
                 )
 
-                RotuloCampo(texto = "Sentimento do dia")
-                GrupoDeChips(opcoes = listOf("Feliz", "Triste", "Ansioso", "Irritado", "Calmo", "Cansado"), selecionado = sentimento, onSelecionar = { s -> sentimento = s })
-
-                Spacer(modifier = Modifier.height(16.dp))
-                RotuloCampo(texto = "Energia do dia")
-                GrupoDeChips(opcoes = listOf("Baixa", "Média", "Alta"), selecionado = energia, onSelecionar = { e -> energia = e })
-
-                Spacer(modifier = Modifier.height(16.dp))
-                RotuloCampo(texto = "Humor do dia")
-                GrupoDeChips(opcoes = listOf("Muito bem", "Bem", "Neutro", "Mal", "Muito mal"), selecionado = humor, onSelecionar = { h -> humor = h })
-
-                Spacer(modifier = Modifier.height(16.dp))
-                RotuloCampo(texto = "Quantas horas você dormiu?")
-                CampoDeTexto(
-                    valor = horasSono,
-                    onValorChange = { text ->
-                        val filtrado = text.filter { char -> char.isDigit() || char == '.' || char == ',' }.take(5)
-                        // Permite no máximo um separador decimal
-                        if (filtrado.count { it == '.' || it == ',' } <= 1) {
-                            horasSono = filtrado
-                        }
-                    },
-                    placeholder = "Ex: 7.5",
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                RotuloCampo(texto = "Conte algo importante (opcional)")
-                CampoDeTexto(
-                    valor = relato,
-                    onValorChange = { text -> relato = text },
-                    placeholder = "Descreva algo do seu dia...",
-                    singleLine = false,
-                    minLinhas = 3
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-                RotuloCampo(texto = "Pensamentos (Selecione um)")
-                // Seleção única garantida pelo GrupoDeChips
-                GrupoDeChips(opcoes = listOf("Positivos", "Negativos", "Neutros"), selecionado = pensamentoSelecionado, onSelecionar = { p -> pensamentoSelecionado = p })
-
-                val horasNum = horasSono.replace(',', '.').toDoubleOrNull()
-                val formularioValido = sentimento != null && energia != null && humor != null &&
-                        horasNum != null && horasNum in 0.0..24.0 && pensamentoSelecionado != null
+                // Chama o formulário centralizado passando o estado
+                FormularioHumor(state = humorState)
 
                 Spacer(modifier = Modifier.height(24.dp))
                 BotaoPrimario(
                     texto = "Salvar e acessar o Dialoga 💜",
-                    habilitado = formularioValido,
+                    habilitado = humorState.isValido,
                     onClick = finalizarComDados
                 )
                 BotaoTexto(texto = "Agora não — ir para o início", onClick = { onFinalizar(JsonObject()) })
