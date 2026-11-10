@@ -37,7 +37,7 @@ fun ProfissionalScreen(onLogout: () -> Unit) {
     val profile = authState.userProfile
     val nomeExibicao = profile?.getNomeExibicao() ?: "Profissional"
     val iniciais = profile?.getIniciais() ?: "PR"
-    val fotoUrl = profile?.foto
+    val fotoUrl = profile?.getFotoUrlCompleta()
 
     val itensMenu = remember {
         listOf(

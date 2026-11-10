@@ -11,7 +11,7 @@ import com.aulasandroid.mobiledialoga.R
 import com.aulasandroid.mobiledialoga.components.CabecalhoCard
 import com.aulasandroid.mobiledialoga.components.DialogaButton
 import com.aulasandroid.mobiledialoga.components.DialogaCard
-import com.aulasandroid.mobiledialoga.components.DialogaSelectField
+import com.aulasandroid.mobiledialoga.components.DialogaMultiSelectField
 import com.aulasandroid.mobiledialoga.components.DialogaTextField
 import com.aulasandroid.mobiledialoga.components.MascaraCelular
 import com.aulasandroid.mobiledialoga.components.MascaraCpf
@@ -120,11 +120,11 @@ fun DadosPessoaisForm(
             } else {
                 especialidades
             }
-            DialogaSelectField(
-                rotulo = "Especialidade",
+            DialogaMultiSelectField(
+                rotulo = "Especialidades (selecione uma ou mais)",
                 opcoes = opcoesEspec,
-                selecionada = estado.especialidade,
-                onSelecionar = onEspecialidadeChange,
+                selecionadas = estado.especialidadesSelecionadas,
+                onToggle = onEspecialidadeChange,
                 erro = estado.erroEspecialidade,
                 modifier = Modifier.fillMaxWidth()
             )

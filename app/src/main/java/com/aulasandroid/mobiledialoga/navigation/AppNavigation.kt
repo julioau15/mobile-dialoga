@@ -60,6 +60,8 @@ fun AppNavigation() {
             if (isProfissional) {
                 PrimeiroAcessoProfissionalScreen(
                     nome = authState.userProfile?.nome,
+                    buscarPacientes = { query -> authState.buscarPacientes(query) },
+                    onVincularPaciente = { paciente -> scope.launch { authState.vincularPaciente(paciente.id) } },
                     onFinalizar = { scope.launch { authState.concluirPrimeiroAcesso() } }
                 )
             } else {

@@ -47,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -63,18 +64,24 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.aulasandroid.mobiledialoga.components.DialogaButton
+import com.aulasandroid.mobiledialoga.components.coresCampo
+import com.aulasandroid.mobiledialoga.ui.theme.CorBorda
+import com.aulasandroid.mobiledialoga.ui.theme.CorPrimaria
+import com.aulasandroid.mobiledialoga.ui.theme.CorSecundaria
+import com.aulasandroid.mobiledialoga.ui.theme.CorTexto
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 // ---------- Cores do design (tela de primeiro acesso) ----------
-internal val FundoLavanda = Color(0xFFF3EEFF)
-internal val BordaSuave = Color(0xFFE3DBF0)
-internal val SelecionadoFundo = Color(0xFFF1EAFB)
-internal val TextoTitulo = Color(0xFF241B3A)
+internal val FundoLavanda = Color(0xFFF5F0FF)
+internal val BordaSuave = Color(0xFFE8DFF0)
+internal val SelecionadoFundo = Color(0xFFF3EDF9)
+internal val TextoTitulo = Color(0xFF1A0F2B)
 internal val TextoSuave = Color(0xFF4A4458)
 internal val VerdeFundo = Color(0xFFEAF8EF)
-internal val VerdeBorda = Color(0xFFB7E4C7)
+internal val VerdeBorda = Color(0xFF2E9E5B)
 internal val RosaFundo = Color(0xFFFDEDED)
 internal val RosaBorda = Color(0xFFF5C2C2)
 internal val CorErro = Color(0xFFDC2626)
@@ -268,19 +275,12 @@ internal fun BotaoPrimario(
     modifier: Modifier = Modifier,
     habilitado: Boolean = true
 ) {
-    val primary = MaterialTheme.colorScheme.primary
-    Button(
+    DialogaButton(
+        texto = texto,
         onClick = onClick,
         enabled = habilitado,
-        shape = RoundedCornerShape(12.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = primary,
-            contentColor = Color.White
-        ),
-        modifier = modifier.fillMaxWidth().height(50.dp)
-    ) {
-        Text(text = texto, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-    }
+        modifier = modifier.fillMaxWidth()
+    )
 }
 
 @Composable
@@ -289,8 +289,8 @@ internal fun BotaoTexto(texto: String, onClick: () -> Unit, destaque: Boolean = 
         Text(
             text = texto,
             fontSize = 14.sp,
-            color = if (destaque) MaterialTheme.colorScheme.primary else TextoSuave,
-            fontWeight = if (destaque) FontWeight.SemiBold else FontWeight.Normal,
+            color = if (destaque) CorPrimaria else TextoSuave,
+            fontWeight = if (destaque) FontWeight.Bold else FontWeight.SemiBold,
             textAlign = TextAlign.Center
         )
     }
@@ -303,25 +303,38 @@ internal fun OpcaoChip(
     texto: String,
     selecionado: Boolean,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icone: ImageVector? = null
 ) {
-    val primary = MaterialTheme.colorScheme.primary
-    val forma = RoundedCornerShape(10.dp)
+    val primary = CorPrimaria
+    val forma = RoundedCornerShape(12.dp)
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .clip(forma)
-            .background(if (selecionado) SelecionadoFundo else Color.White)
-            .border(1.dp, if (selecionado) primary else BordaSuave, forma)
+            .background(if (selecionado) primary else Color.White)
+            .border(if (selecionado) 0.dp else 1.5.dp, if (selecionado) primary else CorBorda, forma)
+            .then(if (selecionado) Modifier.shadow(3.dp, forma, ambientColor = primary, spotColor = primary) else Modifier)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
+            .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
-        Text(
-            text = texto,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (selecionado) primary else TextoTitulo
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icone != null) {
+                Icon(
+                    imageVector = icone,
+                    contentDescription = null,
+                    tint = if (selecionado) Color.White else primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+            Text(
+                text = texto,
+                fontSize = 13.sp,
+                fontWeight = if (selecionado) FontWeight.Bold else FontWeight.Medium,
+                color = if (selecionado) Color.White else TextoTitulo
+            )
+        }
     }
 }
 
@@ -348,19 +361,23 @@ internal fun EscolhaBinaria(
     textoSim: String,
     textoNao: String,
     sim: Boolean?,
-    onEscolher: (Boolean) -> Unit
+    onEscolher: (Boolean) -> Unit,
+    iconeSim: ImageVector? = Icons.Default.Check,
+    iconeNao: ImageVector? = Icons.Default.Close
 ) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         OpcaoChip(
             texto = textoSim,
             selecionado = sim == true,
             onClick = { onEscolher(true) },
+            icone = iconeSim,
             modifier = Modifier.weight(1f)
         )
         OpcaoChip(
             texto = textoNao,
             selecionado = sim == false,
             onClick = { onEscolher(false) },
+            icone = iconeNao,
             modifier = Modifier.weight(1f)
         )
     }
@@ -505,7 +522,8 @@ internal fun BuscaPessoa(
     resultados: List<PessoaSugestao>,
     selecionado: PessoaSugestao?,
     onSelecionar: (PessoaSugestao) -> Unit,
-    carregando: Boolean = false
+    carregando: Boolean = false,
+    mensagemVazia: String = "Nenhum resultado encontrado"
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         RotuloCampo(texto = rotulo)
@@ -526,7 +544,7 @@ internal fun BuscaPessoa(
         } else if (busca.trim().length >= 2) {
             if (resultados.isEmpty()) {
                 Text(
-                    text = "Nenhum profissional encontrado",
+                    text = mensagemVazia,
                     fontSize = 13.sp,
                     color = TextoSuave,
                     modifier = Modifier.fillMaxWidth().padding(8.dp),
@@ -546,37 +564,40 @@ internal fun BuscaPessoa(
 @Composable
 private fun LinhaPessoa(pessoa: PessoaSugestao, selecionada: Boolean, onClick: (() -> Unit)?) {
     val forma = RoundedCornerShape(10.dp)
+    val primary = MaterialTheme.colorScheme.primary
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .fillMaxWidth()
             .clip(forma)
             .background(if (selecionada) VerdeFundo else Color.White)
-            .border(1.dp, if (selecionada) VerdeBorda else BordaSuave, forma)
+            .border(1.5.dp, if (selecionada) VerdeBorda else BordaSuave, forma)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(12.dp)
+            .padding(14.dp)
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.size(36.dp).clip(CircleShape).background(SelecionadoFundo)
+            modifier = Modifier.size(40.dp).clip(CircleShape).background(if (selecionada) VerdeFundo else SelecionadoFundo)
         ) {
             Text(
                 text = pessoa.nome.take(1).uppercase(),
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold
+                color = primary,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
             )
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = pessoa.nome, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextoTitulo, maxLines = 1)
-            Text(text = pessoa.detalhe, fontSize = 12.sp, color = TextoSuave, maxLines = 1)
+            Text(text = pessoa.nome, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextoTitulo, maxLines = 1)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(text = pessoa.detalhe, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = primary, maxLines = 1)
         }
         if (selecionada) {
             Icon(
                 imageVector = Icons.Default.Check,
                 contentDescription = null,
                 tint = Color(0xFF2E9E5B),
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
     }

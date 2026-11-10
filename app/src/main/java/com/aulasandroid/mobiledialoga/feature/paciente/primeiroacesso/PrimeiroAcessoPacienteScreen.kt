@@ -177,8 +177,8 @@ fun PrimeiroAcessoPacienteScreen(
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
-                // Desativado enquanto nenhum dos campos for preenchido
-                val podeContinuar1 = apelido.isNotBlank() || nascimento.isNotEmpty()
+                // Ativo quando o apelido E a data de nascimento válida (8 dígitos) forem preenchidos
+                val podeContinuar1 = apelido.trim().isNotBlank() && nascimento.length == 8 && dataDigitosParaIso(nascimento) != null
                 BotaoPrimario(
                     texto = "Continuar →",
                     habilitado = podeContinuar1,
@@ -203,8 +203,8 @@ fun PrimeiroAcessoPacienteScreen(
                 )
 
                 EscolhaBinaria(
-                    textoSim = "✅ Sim, tenho",
-                    textoNao = "❌ Não por enquanto",
+                    textoSim = "Sim, tenho",
+                    textoNao = "Não por enquanto",
                     sim = temProfissional,
                     onEscolher = { escolha ->
                         temProfissional = escolha
@@ -234,7 +234,8 @@ fun PrimeiroAcessoPacienteScreen(
                             profissionalSelecionado = p
                             buscaText = p.nome
                         },
-                        carregando = buscando
+                        carregando = buscando,
+                        mensagemVazia = "Nenhum profissional encontrado"
                     )
                 } else if (temProfissional == false) {
                     CartaoAviso(fundo = RosaFundo, borda = RosaBorda) {

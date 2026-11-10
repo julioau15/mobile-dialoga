@@ -43,7 +43,7 @@ fun PacienteScreen(onLogout: () -> Unit) {
     val profile = authState.userProfile
     val nomeExibicao = profile?.getNomeExibicao() ?: "Paciente"
     val iniciais = profile?.getIniciais() ?: "PA"
-    val fotoUrl = profile?.foto
+    val fotoUrl = profile?.getFotoUrlCompleta()
 
     val itensMenu = remember {
         listOf(

@@ -31,6 +31,16 @@ import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.TextoTit
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.textoComNegrito
 import kotlinx.coroutines.delay
 
+private fun getDoisPrimeirosNomes(nomeCompleto: String?): String {
+    if (nomeCompleto.isNullOrBlank()) return ""
+    val partes = nomeCompleto.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }
+    return when {
+        partes.size >= 2 -> "${partes[0]} ${partes[1]}"
+        partes.size == 1 -> partes[0]
+        else -> ""
+    }
+}
+
 /**
  * Primeiro acesso do profissional (tela única).
  */
@@ -48,8 +58,8 @@ fun PrimeiroAcessoProfissionalScreen(
     var selecionado by remember { mutableStateOf<PessoaSugestao?>(null) }
     var mostrarDialogo by remember { mutableStateOf(false) }
 
-    val primeiroNome = nome?.trim()?.split(" ")?.firstOrNull().orEmpty()
-    val titulo = if (primeiroNome.isBlank()) "Bem-vindo ao Dialoga! 👋" else "Bem-vindo ao Dialoga, $primeiroNome! 👋"
+    val doisNomes = getDoisPrimeirosNomes(nome)
+    val titulo = if (doisNomes.isBlank()) "Bem-vindo ao Dialoga! 👋" else "Bem-vindo ao Dialoga, $doisNomes! 👋"
 
     LaunchedEffect(busca) {
         if (selecionado != null || busca.trim().length < 2) {
@@ -69,7 +79,7 @@ fun PrimeiroAcessoProfissionalScreen(
 
     PrimeiroAcessoLayout {
         Cabecalho(
-            ilustracao = R.drawable.ic_primeiroacesso_1, // Usando ícone padrão para prof
+            ilustracao = R.drawable.ic_primeiroacesso_1,
             titulo = titulo,
             descricao = "Aqui você acompanha seus pacientes, cria tarefas e gerencia sua agenda — tudo em um só lugar."
         )
@@ -84,8 +94,8 @@ fun PrimeiroAcessoProfissionalScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         EscolhaBinaria(
-            textoSim = "✅ Sim, quero vincular",
-            textoNao = "⏭️ Fazer depois",
+            textoSim = "Sim, quero vincular",
+            textoNao = "Fazer depois",
             sim = quer,
             onEscolher = { quer = it }
         )
@@ -106,7 +116,8 @@ fun PrimeiroAcessoProfissionalScreen(
                     selecionado = p
                     busca = p.nome
                 },
-                carregando = buscando
+                carregando = buscando,
+                mensagemVazia = "Nenhum paciente encontrado"
             )
         } else if (quer == false) {
             CartaoAviso(fundo = SelecionadoFundo, borda = BordaSuave) {
@@ -124,8 +135,14 @@ fun PrimeiroAcessoProfissionalScreen(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+        val podeContinuarProf = when (quer) {
+            null -> false
+            true -> selecionado != null
+            false -> true
+        }
         BotaoPrimario(
             texto = "Acessar o Dialoga →",
+            habilitado = podeContinuarProf,
             onClick = {
                 if (quer == true && selecionado != null) {
                     mostrarDialogo = true

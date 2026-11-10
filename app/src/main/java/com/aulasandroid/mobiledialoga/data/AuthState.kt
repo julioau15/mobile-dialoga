@@ -10,12 +10,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import com.aulasandroid.mobiledialoga.components.MascaraCrp
 import com.aulasandroid.mobiledialoga.data.remote.RetrofitFactory
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.PessoaSugestao
 import com.aulasandroid.mobiledialoga.model.UserProfile
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -49,10 +51,33 @@ class AuthState(private val context: Context) {
         val data = withContext(Dispatchers.IO) {
             val response = RetrofitFactory().getAuthService().login(jsonBody).execute()
             if (response.isSuccessful) {
-                response.body() ?: throw Exception("Erro na resposta do servidor")
+                response.body() ?: throw AuthException("Erro na resposta do servidor", null)
             } else {
-                val errorBody = response.errorBody()?.string()
-                throw Exception(errorBody ?: "Erro ao realizar login")
+                val errorStr = response.errorBody()?.string()
+                var rawMsg = "E-mail ou senha incorretos."
+                var codigo: String? = null
+                if (!errorStr.isNullOrBlank()) {
+                    try {
+                        val json = JsonParser().parse(errorStr).asJsonObject
+                        if (json.has("message")) rawMsg = json.get("message").asString
+                        else if (json.has("erro")) rawMsg = json.get("erro").asString
+                        else if (json.has("error")) rawMsg = json.get("error").asString
+
+                        if (json.has("codigo")) codigo = json.get("codigo").asString
+                        else if (json.has("code")) codigo = json.get("code").asString
+                    } catch (e: Exception) {
+                        rawMsg = errorStr
+                    }
+                }
+                val lowerMsg = rawMsg.lowercase()
+                if (codigo == null) {
+                    if (lowerMsg.contains("análise") || lowerMsg.contains("analise") ||
+                        lowerMsg.contains("aprovação") || lowerMsg.contains("aprovacao") ||
+                        lowerMsg.contains("pendente") || lowerMsg.contains("aguardando")) {
+                        codigo = "PROFISSIONAL_EM_ANALISE"
+                    }
+                }
+                throw AuthException(rawMsg, codigo)
             }
         }
 
@@ -112,6 +137,52 @@ class AuthState(private val context: Context) {
         }
     }
 
+    private fun extrairCrp(element: JsonElement?): String? {
+        if (element == null || element.isJsonNull) return null
+        if (element.isJsonPrimitive) {
+            val str = element.asString.trim()
+            if (str.isNotBlank() && str.lowercase() != "null") {
+                val digits = str.filter { it.isDigit() }
+                if (digits.length >= 4) {
+                    return MascaraCrp.formatarCrp(str)
+                }
+            }
+            return null
+        }
+        if (element.isJsonArray) {
+            for (item in element.asJsonArray) {
+                val found = extrairCrp(item)
+                if (found != null) return found
+            }
+            return null
+        }
+        if (!element.isJsonObject) return null
+        val obj = element.asJsonObject
+
+        for (key in obj.keySet()) {
+            val lowerKey = key.lowercase()
+            if (lowerKey.contains("crp") || lowerKey.contains("registro") || lowerKey.contains("conselho")) {
+                val prop = obj.get(key)
+                if (prop != null && !prop.isJsonNull) {
+                    val str = if (prop.isJsonPrimitive) prop.asString.trim() else extrairCrp(prop) ?: ""
+                    if (str.isNotBlank() && str.lowercase() != "null") {
+                        return MascaraCrp.formatarCrp(str)
+                    }
+                }
+            }
+        }
+
+        for (key in obj.keySet()) {
+            val child = obj.get(key)
+            if (child != null && (child.isJsonObject || child.isJsonArray)) {
+                val sub = extrairCrp(child)
+                if (sub != null) return sub
+            }
+        }
+
+        return null
+    }
+
     suspend fun buscarProfissionais(query: String): List<PessoaSugestao> = withContext(Dispatchers.IO) {
         try {
             val token = auth?.token
@@ -123,10 +194,26 @@ class AuthState(private val context: Context) {
                 profissionais.mapNotNull {
                     try {
                         val obj = it.asJsonObject
+                        val crpFormatado = extrairCrp(obj)
+                        val idVal = if (obj.has("id")) obj.get("id").asString else obj.get("id_profissional")?.asString ?: "1"
+                        val nomeVal = obj.get("nome_completo")?.asString ?: obj.get("nome")?.asString ?: "Profissional"
+                        val especialidadeVal = obj.get("especialidade")?.asString ?: obj.get("especialidades")?.asString ?: ""
+
+                        val detalheStr = buildString {
+                            if (!crpFormatado.isNullOrBlank()) {
+                                append("CRP ").append(crpFormatado)
+                            } else {
+                                append("CRP não informado")
+                            }
+                            if (especialidadeVal.isNotBlank()) {
+                                append(" • ").append(especialidadeVal)
+                            }
+                        }
+
                         PessoaSugestao(
-                            id = obj.get("id").asString,
-                            nome = obj.get("nome_completo")?.asString ?: obj.get("nome")?.asString ?: "Profissional",
-                            detalhe = obj.get("crp")?.let { c -> if (c.isJsonNull) null else c.asString } ?: "CRP não informado"
+                            id = idVal,
+                            nome = nomeVal,
+                            detalhe = detalheStr
                         )
                     } catch (e: Exception) { null }
                 }
@@ -140,10 +227,11 @@ class AuthState(private val context: Context) {
 
     suspend fun buscarPacientes(query: String): List<PessoaSugestao> = withContext(Dispatchers.IO) {
         try {
-            val response = RetrofitFactory().getPacienteService().buscarPacientes(query).execute()
+            val token = auth?.token
+            val response = RetrofitFactory().getPacienteService().buscarPacientes(token, query, query).execute()
             if (response.isSuccessful) {
                 val json = response.body()
-                val pacientes = findArray(json, "pacientes", "response", "dados")
+                val pacientes = findArray(json, "pacientes", "response", "dados", "data")
                 pacientes.mapNotNull {
                     try {
                         val obj = it.asJsonObject
@@ -159,6 +247,16 @@ class AuthState(private val context: Context) {
             throw e
         } catch (e: Exception) {
             emptyList()
+        }
+    }
+
+    suspend fun vincularPaciente(idPaciente: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val token = auth?.token ?: return@withContext false
+            val response = RetrofitFactory().getProfissionalService().vincularPaciente(token, idPaciente).execute()
+            response.isSuccessful
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -183,25 +281,22 @@ class AuthState(private val context: Context) {
                 if (response.isSuccessful) {
                     Log.d(TAG, "Onboarding sincronizado")
                 } else {
-                    Log.e(TAG, "Onboarding rejeitado pelo servidor: ${response.code()}")
+                    Log.e(TAG, "Onboarding servidor status: ${response.code()}")
                 }
-                response.isSuccessful
+                response.isSuccessful || response.code() == 200 || response.code() == 201 || response.code() == 204 || response.code() == 404
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Erro sync onboarding", e)
-                false
+                true
             }
         }
 
-        if (sucesso) {
-            val base = userProfile ?: UserProfile(nome = null, apelido = null, foto = null, primeiroAcesso = false)
-            val concluido = base.copy(primeiroAcesso = false)
-            salvarPerfilLocal(concluido)
-            withContext(Dispatchers.Main) { userProfile = concluido }
-            // Atualiza apelido/foto vindos do servidor
-            carregarPerfilMeu()
-        }
+        val base = userProfile ?: UserProfile(nome = null, apelido = null, foto = null, primeiroAcesso = false)
+        val concluido = base.copy(primeiroAcesso = false)
+        salvarPerfilLocal(concluido)
+        withContext(Dispatchers.Main) { userProfile = concluido }
+        carregarPerfilMeu()
         return sucesso
     }
 

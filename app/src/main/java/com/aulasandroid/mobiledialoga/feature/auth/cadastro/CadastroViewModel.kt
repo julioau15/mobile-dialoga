@@ -3,6 +3,7 @@ package com.aulasandroid.mobiledialoga.feature.auth.cadastro
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
+import com.aulasandroid.mobiledialoga.components.MascaraCrp
 import com.aulasandroid.mobiledialoga.core.error.ErrorTranslator
 import com.aulasandroid.mobiledialoga.core.validation.EmailValidator
 import com.aulasandroid.mobiledialoga.core.validation.PasswordValidator
@@ -89,20 +90,43 @@ class CadastroViewModel : ViewModel() {
         _uiState.value = estado.copy(instituicaoClinica = instituicao, erroGeral = null)
     }
 
+    fun onEspecialidadeToggle(especialidadeNome: String) {
+        val atuais = estado.especialidadesSelecionadas.toMutableList()
+        if (atuais.contains(especialidadeNome)) {
+            atuais.remove(especialidadeNome)
+        } else {
+            atuais.add(especialidadeNome)
+        }
+        _uiState.value = estado.copy(
+            especialidadesSelecionadas = atuais,
+            especialidade = atuais.firstOrNull(),
+            erroEspecialidade = null,
+            erroGeral = null
+        )
+    }
+
     fun onEspecialidadeChange(especialidade: String) {
-        _uiState.value = estado.copy(especialidade = especialidade, erroEspecialidade = null, erroGeral = null)
+        onEspecialidadeToggle(especialidade)
     }
 
     fun continuar() {
         val atual = estado
+        val nomeLimpo = atual.nome.trim()
+        val partesNome = nomeLimpo.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        val erroNome = when {
+            nomeLimpo.isBlank() -> "Informe seu nome completo"
+            partesNome.size < 2 -> "Informe seu nome completo (ex: Julio Augusto)"
+            else -> null
+        }
+
         val erroCpf = if (atual.tipoConta == TipoConta.PROFISSIONAL && atual.cpf.length < 11) "CPF inválido" else null
         val erroCrp = if (atual.tipoConta == TipoConta.PROFISSIONAL && atual.crp.isBlank()) "Informe seu CRP" else null
-        val erroEspecialidade = if (atual.tipoConta == TipoConta.PROFISSIONAL && atual.especialidade == null) {
-            "Selecione sua especialidade"
+        val erroEspecialidade = if (atual.tipoConta == TipoConta.PROFISSIONAL && atual.especialidadesSelecionadas.isEmpty()) {
+            "Selecione ao menos uma especialidade"
         } else null
 
         val validado = atual.copy(
-            erroNome = if (atual.nome.isBlank()) "Informe seu nome completo" else null,
+            erroNome = erroNome,
             erroEmail = EmailValidator.validar(atual.email),
             erroCelular = PhoneValidator.validar(atual.celular),
             erroCpf = erroCpf,
@@ -123,7 +147,7 @@ class CadastroViewModel : ViewModel() {
         _uiState.value = validado.copy(isLoading = true, erroGeral = null)
 
         val cpfArg = if (atual.tipoConta == TipoConta.PROFISSIONAL) atual.cpf else null
-        val crpArg = if (atual.tipoConta == TipoConta.PROFISSIONAL) atual.crp else null
+        val crpArg = if (atual.tipoConta == TipoConta.PROFISSIONAL && atual.crp.isNotBlank()) MascaraCrp.formatarCrp(atual.crp) else null
 
         RetrofitFactory().getAuthService().verificarCadastro(
             email = atual.email,
@@ -236,15 +260,22 @@ class CadastroViewModel : ViewModel() {
                     }
                 })
         } else {
-            val selectedEspId = estado.especialidadesList.find { it.nome == atual.especialidade }?.id ?: 1
+            val selectedEspIds = estado.especialidadesSelecionadas.mapNotNull { nome ->
+                estado.especialidadesList.find { it.nome == nome }?.id
+            }
+            val finalEspIds = if (selectedEspIds.isNotEmpty()) selectedEspIds else listOf(1)
+            val espJson = finalEspIds.toString()
+
+            val crpFormatado = MascaraCrp.formatarCrp(atual.crp)
+
             val nomeBody = RequestBody.create(mediaType, atual.nome)
             val emailBody = RequestBody.create(mediaType, atual.email)
             val celularBody = RequestBody.create(mediaType, atual.celular)
             val senhaBody = RequestBody.create(mediaType, atual.senha)
             val cpfBody = RequestBody.create(mediaType, atual.cpf)
-            val crpBody = RequestBody.create(mediaType, atual.crp)
+            val crpBody = RequestBody.create(mediaType, crpFormatado)
             val instBody = if (atual.instituicaoClinica.isNotBlank()) RequestBody.create(mediaType, atual.instituicaoClinica) else null
-            val espBody = RequestBody.create(mediaType, "[$selectedEspId]")
+            val espBody = RequestBody.create(mediaType, espJson)
 
             RetrofitFactory().getProfissionalService().cadastrarProfissional(
                 nomeBody, emailBody, celularBody, senhaBody, cpfBody, crpBody, instBody, espBody

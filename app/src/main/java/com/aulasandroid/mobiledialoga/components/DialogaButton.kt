@@ -43,12 +43,12 @@ fun DialogaButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = CorPrimaria,
             contentColor = CorBranco,
-            disabledContainerColor = CorPrimaria.copy(alpha = 0.5f),
-            disabledContentColor = CorBranco
+            disabledContainerColor = Color(0xFFE8E1F2),
+            disabledContentColor = CorPrimaria.copy(alpha = 0.7f)
         ),
         modifier = modifier
             .height(46.dp)
-            .shadow(4.dp, FormatoBotao, ambientColor = CorPrimaria, spotColor = CorPrimaria)
+            .shadow(if (enabled) 4.dp else 0.dp, FormatoBotao, ambientColor = CorPrimaria, spotColor = CorPrimaria)
     ) {
         Text(text = texto, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }

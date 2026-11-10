@@ -15,8 +15,19 @@ object ErrorTranslator {
             lower.contains("unable to resolve host") || lower.contains("failed to connect") ->
                 "Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente."
 
-            else ->
+            lower.contains("análise") || lower.contains("analise") || lower.contains("aprovação") ||
+            lower.contains("aprovacao") || lower.contains("pendente") || lower.contains("aguardando") ->
+                "Seu cadastro de profissional está em análise pelo administrador."
+
+            lower.contains("bloqueado") || lower.contains("desativado") || lower.contains("recusado") ->
+                "Sua conta está indisponível ou foi recusada. Entre em contato com o suporte."
+
+            lower.contains("incorret") || lower.contains("inválid") || lower.contains("invalid") ||
+            lower.contains("não encontrad") || lower.contains("nao encontrad") || lower.contains("senha") || lower.contains("email") ->
                 "E-mail ou senha incorretos."
+
+            else ->
+                mensagemBackend
         }
     }
 

@@ -46,4 +46,30 @@ object MascaraCrp : VisualTransformation {
 
         return TransformedText(AnnotatedString(formatado), safeMapping)
     }
+
+    /**
+     * Formata uma string bruta de CRP para o padrão "99/999999-AA"
+     */
+    fun formatarCrp(raw: String): String {
+        if (raw.isBlank()) return ""
+        val clean = raw.uppercase()
+        val digits = StringBuilder()
+        val letters = StringBuilder()
+        for (c in clean) {
+            when {
+                c.isDigit() -> if (digits.length < 8) digits.append(c)
+                c.isLetter() -> if (digits.length >= 2 && letters.length < 2) letters.append(c)
+            }
+        }
+        val region = digits.take(2).toString()
+        val numbers = digits.drop(2).take(6).toString()
+        val suffixLetters = letters.take(2).toString()
+
+        if (region.isEmpty()) return raw
+        return buildString {
+            append(region)
+            if (numbers.isNotEmpty() || clean.contains("/")) append("/").append(numbers)
+            if (suffixLetters.isNotEmpty() || clean.contains("-")) append("-").append(suffixLetters)
+        }
+    }
 }

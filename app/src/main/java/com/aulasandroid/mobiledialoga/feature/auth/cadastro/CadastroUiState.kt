@@ -24,6 +24,7 @@ data class CadastroUiState(
     val crp: String = "",
     val instituicaoClinica: String = "",
     val especialidade: String? = null,
+    val especialidadesSelecionadas: List<String> = emptyList(),
     val especialidadesList: List<EspecialidadeDto> = emptyList(),
     val senha: String = "",
     val confirmacao: String = "",

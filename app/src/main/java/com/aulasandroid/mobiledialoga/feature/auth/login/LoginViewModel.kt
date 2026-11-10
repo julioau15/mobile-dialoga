@@ -39,7 +39,11 @@ class LoginViewModel : ViewModel() {
                 _uiState.value = estado.copy(isLoading = false)
                 onLoginSuccess(auth.nivel)
             } catch (e: AuthException) {
-                if (e.codigo == "PROFISSIONAL_EM_ANALISE" || e.codigo == "PROFISSIONAL_RECUSADO") {
+                val lowerMsg = (e.message ?: "").lowercase()
+                if (e.codigo == "PROFISSIONAL_EM_ANALISE" || e.codigo == "PROFISSIONAL_RECUSADO" ||
+                    lowerMsg.contains("análise") || lowerMsg.contains("analise") ||
+                    lowerMsg.contains("aprovação") || lowerMsg.contains("aprovacao") ||
+                    lowerMsg.contains("pendente") || lowerMsg.contains("aguardando")) {
                     _uiState.value = estado.copy(isLoading = false)
                     onProfissionalEmAnalise()
                 } else {
@@ -49,10 +53,18 @@ class LoginViewModel : ViewModel() {
                     )
                 }
             } catch (e: Exception) {
-                _uiState.value = estado.copy(
-                    isLoading = false,
-                    erroGeral = ErrorTranslator.traduzirLogin(e.message)
-                )
+                val lowerMsg = (e.message ?: "").lowercase()
+                if (lowerMsg.contains("análise") || lowerMsg.contains("analise") ||
+                    lowerMsg.contains("aprovação") || lowerMsg.contains("aprovacao") ||
+                    lowerMsg.contains("pendente") || lowerMsg.contains("aguardando")) {
+                    _uiState.value = estado.copy(isLoading = false)
+                    onProfissionalEmAnalise()
+                } else {
+                    _uiState.value = estado.copy(
+                        isLoading = false,
+                        erroGeral = ErrorTranslator.traduzirLogin(e.message)
+                    )
+                }
             }
         }
     }

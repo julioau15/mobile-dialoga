@@ -45,6 +45,8 @@ interface PacienteService {
 
     @GET("pacientes/busca")
     fun buscarPacientes(
-        @Query("busca") query: String
+        @Header("x-access-token") token: String?,
+        @Query("q") query: String,
+        @Query("busca") busca: String = query
     ): Call<JsonObject>
 }
