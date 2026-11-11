@@ -21,4 +21,5 @@ class RetrofitFactory {
     fun getRegistroHumorService(): RegistroHumorService = retrofit.create(RegistroHumorService::class.java)
     fun getAnotacaoService(): AnotacaoService = retrofit.create(AnotacaoService::class.java)
     fun getSolicitacaoAcessoService(): SolicitacaoAcessoService = retrofit.create(SolicitacaoAcessoService::class.java)
+    fun getAgendaService(): AgendaService = retrofit.create(AgendaService::class.java)
 }
