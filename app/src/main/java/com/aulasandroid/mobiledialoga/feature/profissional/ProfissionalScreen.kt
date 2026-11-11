@@ -84,7 +84,12 @@ fun ProfissionalScreen(onLogout: () -> Unit) {
     ) { innerPadding ->
         val modifier = Modifier.padding(innerPadding)
         when (subRotaAtual) {
-            ProfissionalSubRota.DASHBOARD -> ProfissionalHomeScreen(modifier = modifier)
+            ProfissionalSubRota.DASHBOARD -> ProfissionalHomeScreen(
+                modifier = modifier,
+                onAbrirAgenda = { subRotaAtual = ProfissionalSubRota.AGENDA },
+                onAbrirPacientes = { subRotaAtual = ProfissionalSubRota.PACIENTES },
+                onAbrirTarefas = { subRotaAtual = ProfissionalSubRota.TAREFAS }
+            )
             ProfissionalSubRota.TAREFAS -> TarefasProfissionalScreen(modifier = modifier)
             ProfissionalSubRota.PACIENTES -> PacientesVinculadosScreen(modifier = modifier)
             ProfissionalSubRota.AGENDA -> ConsultasProfissionalScreen(modifier = modifier)

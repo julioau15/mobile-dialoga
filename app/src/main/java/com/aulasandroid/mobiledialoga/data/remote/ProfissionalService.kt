@@ -80,4 +80,12 @@ interface ProfissionalService {
         @Part("id_especialidade") idEspecialidade: RequestBody?,
         @Part fotoAvatar: MultipartBody.Part? = null
     ): Call<JsonObject>
+
+    // Consultas dos pacientes vinculados ao profissional logado (traz paciente_nome e id_paciente).
+    // O back responde 404 quando não há nenhuma. Opcional: data = yyyy-MM-dd.
+    @GET("profissionais/me/consultas")
+    fun getMinhasConsultas(
+        @Header("x-access-token") token: String,
+        @Query("data") data: String? = null
+    ): Call<JsonObject>
 }
