@@ -16,12 +16,20 @@ import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
+/**
+ * No back, TODAS as rotas /tarefas e /tarefas-destinatarios passam pelo verifyJWT (header x-access-token).
+ * Por isso cada chamada recebe o token. Nas funções antigas ele é o último parâmetro e opcional (null = não envia
+ * o header), para o código do profissional continuar compilando; o ideal é passar o token em todas.
+ */
 interface TarefaService {
     @GET("tarefas")
     fun listarTarefas(@Header("x-access-token") token: String): Call<JsonObject>
 
     @GET("tarefas/{id}")
-    fun buscarTarefaPorId(@Path("id") id: Int): Call<JsonObject>
+    fun buscarTarefaPorId(
+        @Path("id") id: Int,
+        @Header("x-access-token") token: String? = null
+    ): Call<JsonObject>
 
     @Multipart
     @POST("tarefas")
@@ -33,18 +41,25 @@ interface TarefaService {
         @Part("is_rascunho") isRascunho: RequestBody?,
         @Part("paciente_ids") pacienteIds: RequestBody?,
         @Part("prazos_por_paciente") prazosPorPaciente: RequestBody?,
-        @Part anexoArquivo: MultipartBody.Part? = null
+        @Part anexoArquivo: MultipartBody.Part? = null,
+        // usado quando é o PACIENTE quem cria a tarefa (precisa do ajuste no back, ver correcoes-backend.md)
+        @Part("prazo") prazo: RequestBody? = null,
+        @Part("anexo_url") anexoUrl: RequestBody? = null
     ): Call<JsonObject>
 
     @Headers("Content-Type: application/json")
     @POST("tarefas/{id}/perguntas")
     fun adicionarPergunta(
         @Path("id") idTarefa: Int,
-        @Body dados: JsonObject
+        @Body dados: JsonObject,
+        @Header("x-access-token") token: String? = null
     ): Call<JsonObject>
 
     @GET("tarefas/{id}/perguntas")
-    fun listarPerguntasPorTarefa(@Path("id") idTarefa: Int): Call<JsonObject>
+    fun listarPerguntasPorTarefa(
+        @Path("id") idTarefa: Int,
+        @Header("x-access-token") token: String? = null
+    ): Call<JsonObject>
 
     @PUT("tarefas/{id}/enviar")
     fun enviarTarefaParaPaciente(
@@ -53,7 +68,10 @@ interface TarefaService {
     ): Call<JsonObject>
 
     @DELETE("tarefas/{id}")
-    fun excluirTarefa(@Path("id") idTarefa: Int): Call<JsonObject>
+    fun excluirTarefa(
+        @Path("id") idTarefa: Int,
+        @Header("x-access-token") token: String? = null
+    ): Call<JsonObject>
 
     @Headers("Content-Type: application/json")
     @POST("tarefas-destinatarios")
@@ -66,23 +84,29 @@ interface TarefaService {
     fun filtrarTarefasDestinatarios(
         @Query("id_paciente") idPaciente: Int? = null,
         @Query("id_profissional") idProfissional: Int? = null,
-        @Query("status") status: String? = null
+        @Query("status") status: String? = null,
+        @Header("x-access-token") token: String? = null
     ): Call<JsonObject>
 
     @GET("tarefas-destinatarios/{id}/respostas")
-    fun listarRespostasPorTarefaDestinatario(@Path("id") idTarefaDestinatario: Int): Call<JsonObject>
+    fun listarRespostasPorTarefaDestinatario(
+        @Path("id") idTarefaDestinatario: Int,
+        @Header("x-access-token") token: String? = null
+    ): Call<JsonObject>
 
     @Headers("Content-Type: application/json")
     @POST("tarefas-destinatarios/{id}/respostas")
     fun enviarRespostas(
         @Path("id") idTarefaDestinatario: Int,
-        @Body dados: JsonObject
+        @Body dados: JsonObject,
+        @Header("x-access-token") token: String? = null
     ): Call<JsonObject>
 
     @Headers("Content-Type: application/json")
     @PUT("tarefas-destinatarios/{id}")
     fun atualizarStatusTarefaDestinatario(
         @Path("id") idTarefaDestinatario: Int,
-        @Body dados: JsonObject
+        @Body dados: JsonObject,
+        @Header("x-access-token") token: String? = null
     ): Call<JsonObject>
 }

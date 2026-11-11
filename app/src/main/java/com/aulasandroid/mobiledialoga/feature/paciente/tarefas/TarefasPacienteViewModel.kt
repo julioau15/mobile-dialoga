@@ -1,33 +1,81 @@
 package com.aulasandroid.mobiledialoga.feature.paciente.tarefas
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.aulasandroid.mobiledialoga.data.remote.RetrofitFactory
+import com.aulasandroid.mobiledialoga.data.remote.TarefaService
 import com.aulasandroid.mobiledialoga.feature.paciente.tarefas.model.OpcaoPerguntaDto
 import com.aulasandroid.mobiledialoga.feature.paciente.tarefas.model.PerguntaDto
-import com.aulasandroid.mobiledialoga.feature.paciente.tarefas.model.RespostaItemDto
 import com.aulasandroid.mobiledialoga.feature.paciente.tarefas.model.TarefaItemDto
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
+/**
+ * true = se a API falhar, mostra tarefas/perguntas de demonstração (útil só para apresentar sem back).
+ * Em uso normal deixe false: os dados de demonstração escondem erros reais (token, 404, 500...).
+ */
+private const val USAR_DADOS_DEMO = false
+
+private const val TAMANHO_MAX_ANEXO_BYTES = 10 * 1024 * 1024 // 10 MB
+
 data class TarefasPacienteUiState(
     val tarefas: List<TarefaItemDto> = emptyList(),
-    val filtroAtivo: String = "Todas", // "Todas", "Pendentes", "Em andamento", "Concluídas"
+    val filtroAtivo: String = "Todas", // "Todas", "Em andamento", "Em atraso", "Concluídas", "Pendentes"
     val isLoading: Boolean = false,
     val erroGeral: String? = null,
-    val mensagemSucesso: String? = null,
-    val tarefaSelecionada: TarefaItemDto? = null,
+    val toastMensagem: String? = null,
+    // Tela de resposta em tela cheia
+    val tarefaEmEdicao: TarefaItemDto? = null,
     val perguntas: List<PerguntaDto> = emptyList(),
-    val respostasFormulario: Map<Int, RespostaItemDto> = emptyMap(),
     val isLoadingDetalhes: Boolean = false,
-    val isEnviandoResposta: Boolean = false
-)
+    val isEnviandoResposta: Boolean = false,
+    val erroDetalhes: String? = null,
+    // Nova tarefa
+    val isCriandoNovaTarefa: Boolean = false,
+    val erroNovaTarefa: String? = null,
+    // Respostas temporárias do questionário
+    val respostasOpcaoUnica: Map<Int, Int> = emptyMap(), // idPergunta -> idOpcao (humor / unica_escolha)
+    val respostasMultiplasOpcoes: Map<Int, List<Int>> = emptyMap(), // idPergunta -> idOpcoes (multipla_escolha)
+    val respostasTexto: Map<Int, String> = emptyMap(), // idPergunta -> texto
+    val respostasEscala: Map<Int, Int> = emptyMap(), // idPergunta -> número (0..10)
+    // Modais
+    val mostrarModalConfirmarEnvio: Boolean = false,
+    val mostrarModalNovaTarefa: Boolean = false
+) {
+    val todasCount: Int get() = tarefas.size
+    val emAndamentoCount: Int get() = tarefas.count { it.getStatusFormatado() == "Em andamento" }
+    val emAtrasoCount: Int get() = tarefas.count { it.getStatusFormatado() == "Em atraso" }
+    val concluidasCount: Int get() = tarefas.count { it.getStatusFormatado() == "Concluída" }
+    val pendentesCount: Int get() = tarefas.count { it.getStatusFormatado() == "Pendente" }
+
+    fun perguntaRespondida(p: PerguntaDto): Boolean = when (p.tipoNormalizado()) {
+        "humor", "unica_escolha" -> respostasOpcaoUnica.containsKey(p.id)
+        "multipla_escolha" -> respostasMultiplasOpcoes[p.id].orEmpty().isNotEmpty()
+        "escala" -> respostasEscala.containsKey(p.id)
+        else -> respostasTexto[p.id].orEmpty().isNotBlank()
+    }
+
+    val perguntasObrigatoriasPendentes: List<PerguntaDto>
+        get() = perguntas.filter { it.obrigatoria && !perguntaRespondida(it) }
+
+    val algumaRespostaPreenchida: Boolean get() = perguntas.any { perguntaRespondida(it) }
+
+    /** Só libera o envio com todas as perguntas obrigatórias (*) respondidas. */
+    val podeEnviar: Boolean
+        get() = perguntas.isNotEmpty() && algumaRespostaPreenchida && perguntasObrigatoriasPendentes.isEmpty()
+}
 
 class TarefasPacienteViewModel : ViewModel() {
 
@@ -36,236 +84,569 @@ class TarefasPacienteViewModel : ViewModel() {
 
     private val estado: TarefasPacienteUiState get() = _uiState.value ?: TarefasPacienteUiState()
 
+    private val service: TarefaService get() = RetrofitFactory().getTarefaService()
+
+    // ---------- Lista de tarefas ----------
+
     fun carregarTarefas(token: String?) {
         if (token.isNullOrBlank()) return
-        _uiState.value = estado.copy(isLoading = true, erroGeral = null, mensagemSucesso = null)
+        _uiState.value = estado.copy(isLoading = true, erroGeral = null)
 
-        RetrofitFactory().getTarefaService().listarTarefas(token).enqueue(object : Callback<JsonObject> {
+        service.listarTarefas(token).enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
-                if (response.isSuccessful) {
-                    val json = response.body()
-                    val array = findArray(json, "response", "tarefas", "tarefaDestinatario", "dados")
-                    val lista = mutableListOf<TarefaItemDto>()
-                    for (elem in array) {
-                        try {
-                            if (!elem.isJsonObject) continue
-                            val obj = elem.asJsonObject
-                            val item = TarefaItemDto(
-                                id = parseAttrInt(obj, "id_tarefa", "id"),
-                                titulo = parseAttrString(obj, "titulo") ?: "Tarefa",
-                                tipo = parseAttrString(obj, "tipo"),
-                                instrucoes = parseAttrString(obj, "instrucoes"),
-                                anexoArquivo = parseAttrString(obj, "anexo_arquivo"),
-                                dataEnvio = parseAttrString(obj, "data_envio"),
-                                idTarefaDestinatario = parseAttrInt(obj, "id_tarefa_destinatario", "id"),
-                                prazo = parseAttrString(obj, "prazo"),
-                                status = parseAttrString(obj, "status") ?: "pendente",
-                                dataConclusao = parseAttrString(obj, "data_conclusao")
-                            )
-                            lista.add(item)
-                        } catch (e: Exception) { null }
+                when {
+                    response.isSuccessful -> {
+                        val lista = converterTarefas(response.body())
+                        val listaFinal = if (lista.isEmpty() && USAR_DADOS_DEMO) criarTarefasDemonstracao() else lista
+                        _uiState.value = estado.copy(isLoading = false, tarefas = listaFinal, erroGeral = null)
                     }
-                    _uiState.value = estado.copy(isLoading = false, tarefas = lista, erroGeral = null)
-                } else {
-                    val msg = parseErrorMsg(response.errorBody()?.string())
-                    _uiState.value = estado.copy(isLoading = false, erroGeral = msg)
+                    // o back responde 404 quando o paciente ainda não tem tarefas
+                    response.code() == 404 -> {
+                        val listaFinal = if (USAR_DADOS_DEMO) criarTarefasDemonstracao() else emptyList()
+                        _uiState.value = estado.copy(isLoading = false, tarefas = listaFinal, erroGeral = null)
+                    }
+                    else -> falhaAoCarregarLista(
+                        mensagemDeErro(response, "Não foi possível carregar as tarefas")
+                    )
                 }
             }
 
             override fun onFailure(call: Call<JsonObject>, t: Throwable) {
-                _uiState.value = estado.copy(isLoading = false, erroGeral = "Erro ao conectar ao servidor.")
+                falhaAoCarregarLista("Sem conexão com o servidor.")
             }
         })
+    }
+
+    private fun falhaAoCarregarLista(mensagem: String) {
+        _uiState.value = if (USAR_DADOS_DEMO) {
+            estado.copy(isLoading = false, tarefas = criarTarefasDemonstracao(), erroGeral = null)
+        } else {
+            estado.copy(isLoading = false, erroGeral = mensagem)
+        }
+    }
+
+    private fun converterTarefas(json: JsonObject?): List<TarefaItemDto> {
+        val array = findArray(json, "tarefa", "tarefas", "tarefaDestinatario", "response", "dados")
+        val lista = mutableListOf<TarefaItemDto>()
+        for (elem in array) {
+            try {
+                if (!elem.isJsonObject) continue
+                val obj = elem.asJsonObject
+
+                val status = parseAttrString(obj, "status") ?: "pendente"
+                val concluida = status.lowercase().trim() in listOf("concluida", "concluido", "finalizado", "concluída")
+                val doProfissional = parseAttrInt(obj, "id_profissional_criador") > 0
+                val doPaciente = parseAttrInt(obj, "id_paciente_criador") > 0
+                val nomeProfissional = parseAttrString(obj, "profissional_nome", "nome_profissional")
+                    ?: if (doPaciente && !doProfissional) "Você" else "Seu profissional"
+                val criadaPorMim = (doPaciente && !doProfissional) || nomeProfissional == "Você"
+
+                lista.add(
+                    TarefaItemDto(
+                        id = parseAttrInt(obj, "id_tarefa", "id"),
+                        titulo = parseAttrString(obj, "titulo") ?: "Tarefa sem título",
+                        profissionalNome = nomeProfissional,
+                        tipo = parseAttrString(obj, "tipo"),
+                        instrucoes = parseAttrString(obj, "instrucoes"),
+                        anexoArquivo = parseAttrString(obj, "anexo_arquivo"),
+                        dataEnvio = parseAttrString(obj, "data_envio"),
+                        idTarefaDestinatario = parseAttrInt(obj, "id_tarefa_destinatario", "id"),
+                        prazo = parseAttrString(obj, "prazo"),
+                        status = status,
+                        dataConclusao = parseAttrString(obj, "data_conclusao"),
+                        // a API não calcula progresso: só mostra o que vier no campo "progresso"
+                        progresso = if (concluida) 100 else parseAttrInt(obj, "progresso").coerceIn(0, 100),
+                        criadaPorMim = criadaPorMim
+                    )
+                )
+            } catch (e: Exception) {
+                // item mal formado: ignora
+            }
+        }
+        return lista
     }
 
     fun setFiltro(filtro: String) {
         _uiState.value = estado.copy(filtroAtivo = filtro)
     }
 
+    fun limparErroGeral() {
+        _uiState.value = estado.copy(erroGeral = null)
+    }
+
+    // ---------- Abrir tarefa (perguntas + respostas) ----------
+
     fun abrirTarefa(token: String?, tarefa: TarefaItemDto) {
         _uiState.value = estado.copy(
-            tarefaSelecionada = tarefa,
+            tarefaEmEdicao = tarefa,
             perguntas = emptyList(),
-            respostasFormulario = emptyMap(),
+            respostasOpcaoUnica = emptyMap(),
+            respostasMultiplasOpcoes = emptyMap(),
+            respostasTexto = emptyMap(),
+            respostasEscala = emptyMap(),
             isLoadingDetalhes = true,
-            erroGeral = null
+            isEnviandoResposta = false,
+            mostrarModalConfirmarEnvio = false,
+            erroDetalhes = null
         )
 
-        val idTarefa = tarefa.id
-        val idDestinatario = tarefa.idTarefaDestinatario ?: tarefa.id
+        val idDestinatario = tarefa.idTarefaDestinatario?.takeIf { it > 0 } ?: tarefa.id
 
-        // Busca perguntas da tarefa
-        RetrofitFactory().getTarefaService().listarPerguntasPorTarefa(idTarefa).enqueue(object : Callback<JsonObject> {
+        service.listarPerguntasPorTarefa(tarefa.id, token).enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
-                val listaPerguntas = mutableListOf<PerguntaDto>()
-                if (response.isSuccessful) {
-                    val json = response.body()
-                    val array = findArray(json, "pergunta", "perguntas", "response", "dados")
-                    for (elem in array) {
-                        try {
-                            if (!elem.isJsonObject) continue
-                            val obj = elem.asJsonObject
-                            val pId = parseAttrInt(obj, "id")
-                            val pEnunciado = parseAttrString(obj, "enunciado", "pergunta", "texto") ?: "Pergunta"
-                            val pTipo = parseAttrString(obj, "tipo") ?: "texto"
+                if (estado.tarefaEmEdicao == null) return // o usuário já voltou para a lista
 
-                            val opcoesList = mutableListOf<OpcaoPerguntaDto>()
-                            val opcoesArray = findArray(obj, "opcoes", "opcao_pergunta", "opcoes_pergunta")
-                            for (oElem in opcoesArray) {
-                                if (oElem.isJsonObject) {
-                                    val oObj = oElem.asJsonObject
-                                    opcoesList.add(
-                                        OpcaoPerguntaDto(
-                                            id = parseAttrInt(oObj, "id"),
-                                            texto = parseAttrString(oObj, "texto", "opcao", "valor") ?: ""
-                                        )
-                                    )
-                                }
-                            }
-                            listaPerguntas.add(
-                                PerguntaDto(
-                                    id = pId,
-                                    enunciado = pEnunciado,
-                                    tipo = pTipo,
-                                    opcoes = opcoesList
-                                )
-                            )
-                        } catch (e: Exception) { null }
+                when {
+                    response.isSuccessful -> {
+                        var perguntas = converterPerguntas(response.body())
+                        if (perguntas.isEmpty() && USAR_DADOS_DEMO) perguntas = criarPerguntasDemonstracao()
+                        carregarRespostasAnteriores(token, idDestinatario, perguntas)
                     }
+                    // 404 = tarefa sem perguntas
+                    response.code() == 404 -> {
+                        val perguntas = if (USAR_DADOS_DEMO) criarPerguntasDemonstracao() else emptyList()
+                        carregarRespostasAnteriores(token, idDestinatario, perguntas)
+                    }
+                    else -> falhaAoCarregarDetalhes(
+                        mensagemDeErro(response, "Não foi possível carregar as perguntas")
+                    )
                 }
-
-                // Busca respostas anteriores (se houver)
-                carregarRespostasAnteriores(token, idDestinatario, listaPerguntas)
             }
 
             override fun onFailure(call: Call<JsonObject>, t: Throwable) {
-                carregarRespostasAnteriores(token, idDestinatario, emptyList())
+                if (estado.tarefaEmEdicao == null) return
+                falhaAoCarregarDetalhes("Sem conexão com o servidor.")
             }
         })
     }
 
+    private fun falhaAoCarregarDetalhes(mensagem: String) {
+        _uiState.value = estado.copy(isLoadingDetalhes = false, erroDetalhes = mensagem)
+    }
+
+    private fun converterPerguntas(json: JsonObject?): List<PerguntaDto> {
+        val array = findArray(json, "pergunta", "perguntas", "response", "dados")
+        val lista = mutableListOf<Pair<Int, PerguntaDto>>()
+        for (elem in array) {
+            try {
+                if (!elem.isJsonObject) continue
+                val obj = elem.asJsonObject
+
+                val opcoes = mutableListOf<Pair<Int, OpcaoPerguntaDto>>()
+                for (oElem in findArray(obj, "opcoes", "opcao_pergunta", "opcoes_pergunta")) {
+                    if (!oElem.isJsonObject) continue
+                    val oObj = oElem.asJsonObject
+                    opcoes.add(
+                        parseAttrInt(oObj, "ordem") to OpcaoPerguntaDto(
+                            id = parseAttrInt(oObj, "id"),
+                            texto = parseAttrString(oObj, "texto", "opcao", "valor") ?: ""
+                        )
+                    )
+                }
+
+                lista.add(
+                    parseAttrInt(obj, "ordem") to PerguntaDto(
+                        id = parseAttrInt(obj, "id"),
+                        enunciado = parseAttrString(obj, "enunciado", "texto", "pergunta") ?: "Pergunta",
+                        tipo = parseAttrString(obj, "tipo") ?: "texto",
+                        opcoes = opcoes.sortedBy { it.first }.map { it.second },
+                        obrigatoria = parseAttrBool(obj, "obrigatoria", padrao = true)
+                    )
+                )
+            } catch (e: Exception) {
+                // pergunta mal formada: ignora
+            }
+        }
+        return lista.sortedBy { it.first }.map { it.second }
+    }
+
     private fun carregarRespostasAnteriores(token: String?, idDestinatario: Int, perguntas: List<PerguntaDto>) {
-        RetrofitFactory().getTarefaService().listarRespostasPorTarefaDestinatario(idDestinatario).enqueue(object : Callback<JsonObject> {
+        service.listarRespostasPorTarefaDestinatario(idDestinatario, token).enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
-                val mapaRespostas = mutableMapOf<Int, RespostaItemDto>()
+                if (estado.tarefaEmEdicao == null) return
+
+                val mapaUnica = mutableMapOf<Int, Int>()
+                val mapaMultipla = mutableMapOf<Int, MutableList<Int>>()
+                val mapaTexto = mutableMapOf<Int, String>()
+                val mapaEscala = mutableMapOf<Int, Int>()
+
+                // 404 = ainda não existem respostas (normal para tarefa pendente)
+                if (!response.isSuccessful && response.code() != 404) {
+                    _uiState.value = estado.copy(
+                        isLoadingDetalhes = false,
+                        perguntas = perguntas,
+                        erroDetalhes = mensagemDeErro(response, "Não foi possível carregar as respostas")
+                    )
+                    return
+                }
+
                 if (response.isSuccessful) {
-                    val json = response.body()
-                    val array = findArray(json, "resposta", "respostas", "response", "dados")
+                    val tipos = perguntas.associate { it.id to it.tipoNormalizado() }
+                    val array = findArray(response.body(), "resposta", "respostas", "response", "dados")
                     for (elem in array) {
                         try {
                             if (!elem.isJsonObject) continue
                             val obj = elem.asJsonObject
                             val pId = parseAttrInt(obj, "id_pergunta")
-                            val oId = if (obj.has("id_opcao_pergunta") && !obj.get("id_opcao_pergunta").isJsonNull) obj.get("id_opcao_pergunta").asInt else null
-                            val valStr = parseAttrString(obj, "valor")
-                            mapaRespostas[pId] = RespostaItemDto(idPergunta = pId, idOpcaoPergunta = oId, valor = valStr)
-                        } catch (e: Exception) { null }
+                            val oId = parseAttrInt(obj, "id_opcao_pergunta")
+                            val valor = parseAttrString(obj, "valor")
+
+                            // cada resposta vai só para o mapa do tipo da sua pergunta (evita duplicar no reenvio)
+                            when (tipos[pId]) {
+                                "humor", "unica_escolha" -> if (oId > 0) mapaUnica[pId] = oId
+                                "multipla_escolha" -> if (oId > 0) mapaMultipla.getOrPut(pId) { mutableListOf() }.add(oId)
+                                "escala" -> valor?.toIntOrNull()?.let { if (it in 0..10) mapaEscala[pId] = it }
+                                "texto" -> if (!valor.isNullOrBlank()) mapaTexto[pId] = valor
+                                else -> { /* resposta de uma pergunta que não está na lista */ }
+                            }
+                        } catch (e: Exception) {
+                            // resposta mal formada: ignora
+                        }
                     }
                 }
+
                 _uiState.value = estado.copy(
                     isLoadingDetalhes = false,
                     perguntas = perguntas,
-                    respostasFormulario = mapaRespostas
+                    respostasOpcaoUnica = mapaUnica,
+                    respostasMultiplasOpcoes = mapaMultipla,
+                    respostasTexto = mapaTexto,
+                    respostasEscala = mapaEscala
                 )
             }
 
             override fun onFailure(call: Call<JsonObject>, t: Throwable) {
+                if (estado.tarefaEmEdicao == null) return
                 _uiState.value = estado.copy(
                     isLoadingDetalhes = false,
-                    perguntas = perguntas
+                    perguntas = perguntas,
+                    erroDetalhes = "Sem conexão com o servidor."
                 )
             }
         })
     }
 
-    fun fecharTarefaDetalhes() {
+    fun fecharEdicaoTarefa() {
         _uiState.value = estado.copy(
-            tarefaSelecionada = null,
+            tarefaEmEdicao = null,
             perguntas = emptyList(),
-            respostasFormulario = emptyMap(),
-            erroGeral = null
+            respostasOpcaoUnica = emptyMap(),
+            respostasMultiplasOpcoes = emptyMap(),
+            respostasTexto = emptyMap(),
+            respostasEscala = emptyMap(),
+            mostrarModalConfirmarEnvio = false,
+            isLoadingDetalhes = false,
+            isEnviandoResposta = false,
+            erroDetalhes = null
         )
     }
 
-    fun onOpcaoSelecionada(idPergunta: Int, idOpcao: Int) {
-        val mapa = estado.respostasFormulario.toMutableMap()
-        mapa[idPergunta] = RespostaItemDto(idPergunta = idPergunta, idOpcaoPergunta = idOpcao)
-        _uiState.value = estado.copy(respostasFormulario = mapa)
+    // ---------- Handlers de interação com as respostas ----------
+
+    fun onOpcaoUnicaSelecionada(idPergunta: Int, idOpcao: Int) {
+        val mapa = estado.respostasOpcaoUnica.toMutableMap()
+        mapa[idPergunta] = idOpcao
+        _uiState.value = estado.copy(respostasOpcaoUnica = mapa)
+    }
+
+    fun onOpcaoMultiplaToggled(idPergunta: Int, idOpcao: Int) {
+        val mapa = estado.respostasMultiplasOpcoes.toMutableMap()
+        val lista = mapa[idPergunta]?.toMutableList() ?: mutableListOf()
+        if (lista.contains(idOpcao)) lista.remove(idOpcao) else lista.add(idOpcao)
+        mapa[idPergunta] = lista
+        _uiState.value = estado.copy(respostasMultiplasOpcoes = mapa)
     }
 
     fun onTextoRespostaChanged(idPergunta: Int, texto: String) {
-        val mapa = estado.respostasFormulario.toMutableMap()
-        mapa[idPergunta] = RespostaItemDto(idPergunta = idPergunta, valor = texto)
-        _uiState.value = estado.copy(respostasFormulario = mapa)
+        val mapa = estado.respostasTexto.toMutableMap()
+        mapa[idPergunta] = texto
+        _uiState.value = estado.copy(respostasTexto = mapa)
     }
 
-    fun submeterRespostas(token: String?, enviarDefinitivamente: Boolean) {
-        val t = estado.tarefaSelecionada ?: return
-        val idDestinatario = t.idTarefaDestinatario ?: t.id
-        _uiState.value = estado.copy(isEnviandoResposta = true, erroGeral = null)
+    fun onEscalaRespostaSelected(idPergunta: Int, nivel: Int) {
+        val mapa = estado.respostasEscala.toMutableMap()
+        mapa[idPergunta] = nivel
+        _uiState.value = estado.copy(respostasEscala = mapa)
+    }
 
+    // ---------- Envio das respostas ----------
+
+    fun solicitarConfirmacaoEnvio() {
+        // trava de segurança: a tela também desabilita o botão, mas o ViewModel não confia só nela
+        if (!estado.podeEnviar) {
+            _uiState.value = estado.copy(
+                erroDetalhes = "Responda todas as perguntas obrigatórias (*) antes de enviar."
+            )
+            return
+        }
+        _uiState.value = estado.copy(mostrarModalConfirmarEnvio = true, erroDetalhes = null)
+    }
+
+    fun fecharModalConfirmacao() {
+        _uiState.value = estado.copy(mostrarModalConfirmarEnvio = false)
+    }
+
+    fun confirmarEEnviarResposta(token: String?) {
+        val tarefa = estado.tarefaEmEdicao ?: return
+        if (estado.isEnviandoResposta) return
+        if (!estado.podeEnviar) {
+            _uiState.value = estado.copy(
+                mostrarModalConfirmarEnvio = false,
+                erroDetalhes = "Responda todas as perguntas obrigatórias (*) antes de enviar."
+            )
+            return
+        }
+
+        val idDestinatario = tarefa.idTarefaDestinatario?.takeIf { it > 0 } ?: tarefa.id
+        _uiState.value = estado.copy(isEnviandoResposta = true, mostrarModalConfirmarEnvio = false, erroDetalhes = null)
+
+        // Uma entrada por resposta, de acordo com o tipo de cada pergunta (sem duplicar)
         val arrayRespostas = JsonArray()
-        for ((_, item) in estado.respostasFormulario) {
-            val rObj = JsonObject().apply {
-                addProperty("id_pergunta", item.idPergunta)
-                if (item.idOpcaoPergunta != null) addProperty("id_opcao_pergunta", item.idOpcaoPergunta)
-                if (!item.valor.isNullOrBlank()) addProperty("valor", item.valor)
+        for (p in estado.perguntas) {
+            when (p.tipoNormalizado()) {
+                "humor", "unica_escolha" -> estado.respostasOpcaoUnica[p.id]?.let { oId ->
+                    arrayRespostas.add(JsonObject().apply {
+                        addProperty("id_pergunta", p.id)
+                        addProperty("id_opcao_pergunta", oId)
+                    })
+                }
+                "multipla_escolha" -> estado.respostasMultiplasOpcoes[p.id].orEmpty().forEach { oId ->
+                    arrayRespostas.add(JsonObject().apply {
+                        addProperty("id_pergunta", p.id)
+                        addProperty("id_opcao_pergunta", oId)
+                    })
+                }
+                "escala" -> estado.respostasEscala[p.id]?.let { nivel ->
+                    arrayRespostas.add(JsonObject().apply {
+                        addProperty("id_pergunta", p.id)
+                        addProperty("valor", nivel.toString())
+                    })
+                }
+                else -> estado.respostasTexto[p.id]?.trim()?.takeIf { it.isNotBlank() }?.let { txt ->
+                    arrayRespostas.add(JsonObject().apply {
+                        addProperty("id_pergunta", p.id)
+                        addProperty("valor", txt)
+                    })
+                }
             }
-            arrayRespostas.add(rObj)
         }
 
         val payload = JsonObject().apply {
-            addProperty("enviar_definitivamente", enviarDefinitivamente)
+            addProperty("enviar_definitivamente", true)
             add("respostas", arrayRespostas)
         }
 
-        RetrofitFactory().getTarefaService().enviarRespostas(idDestinatario, payload).enqueue(object : Callback<JsonObject> {
+        service.enviarRespostas(idDestinatario, payload, token).enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
-                val isSuccess = response.isSuccessful
-                if (isSuccess) {
-                    if (enviarDefinitivamente) {
-                        // Atualiza o status do destinatário para "concluida"
-                        val updatePayload = JsonObject().apply { addProperty("status", "concluida") }
-                        RetrofitFactory().getTarefaService().atualizarStatusTarefaDestinatario(idDestinatario, updatePayload).enqueue(object : Callback<JsonObject> {
-                            override fun onResponse(c: Call<JsonObject>, r: Response<JsonObject>) {
-                                finalizarEnvioSucesso(token, "Resposta enviada com sucesso! 💚")
-                            }
-
-                            override fun onFailure(c: Call<JsonObject>, t: Throwable) {
-                                finalizarEnvioSucesso(token, "Resposta enviada com sucesso! 💚")
-                            }
-                        })
-                    } else {
-                        finalizarEnvioSucesso(token, "Rascunho salvo com sucesso!")
-                    }
-                } else {
-                    val msg = parseErrorMsg(response.errorBody()?.string()) ?: "Erro ao enviar resposta da tarefa."
-                    _uiState.value = estado.copy(isEnviandoResposta = false, erroGeral = msg)
+                if (!response.isSuccessful) {
+                    // antes o app tratava qualquer resposta como sucesso; agora mostra o erro do back
+                    _uiState.value = estado.copy(
+                        isEnviandoResposta = false,
+                        erroDetalhes = mensagemDeErro(response, "Não foi possível enviar as respostas")
+                    )
+                    return
                 }
+
+                // respostas salvas: marca a tarefa como concluída (se esta chamada falhar, a lista mostra o status real)
+                val atualizacao = JsonObject().apply { addProperty("status", "concluida") }
+                service.atualizarStatusTarefaDestinatario(idDestinatario, atualizacao, token)
+                    .enqueue(object : Callback<JsonObject> {
+                        override fun onResponse(c: Call<JsonObject>, r: Response<JsonObject>) {
+                            finalizarEnvioSucesso(token)
+                        }
+
+                        override fun onFailure(c: Call<JsonObject>, t: Throwable) {
+                            finalizarEnvioSucesso(token)
+                        }
+                    })
             }
 
             override fun onFailure(call: Call<JsonObject>, t: Throwable) {
-                _uiState.value = estado.copy(isEnviandoResposta = false, erroGeral = "Erro ao conectar ao servidor.")
+                _uiState.value = estado.copy(isEnviandoResposta = false, erroDetalhes = "Sem conexão com o servidor.")
             }
         })
     }
 
-    private fun finalizarEnvioSucesso(token: String?, msg: String) {
+    private fun finalizarEnvioSucesso(token: String?) {
         _uiState.value = estado.copy(
             isEnviandoResposta = false,
-            tarefaSelecionada = null,
+            tarefaEmEdicao = null,
             perguntas = emptyList(),
-            respostasFormulario = emptyMap(),
-            mensagemSucesso = msg
+            respostasOpcaoUnica = emptyMap(),
+            respostasMultiplasOpcoes = emptyMap(),
+            respostasTexto = emptyMap(),
+            respostasEscala = emptyMap(),
+            erroDetalhes = null,
+            toastMensagem = "Resposta enviada ao profissional"
         )
         carregarTarefas(token)
     }
 
-    fun limparMensagemSucesso() {
-        _uiState.value = estado.copy(mensagemSucesso = null)
+    // ---------- Nova tarefa criada pelo paciente ----------
+
+    fun abrirModalNovaTarefa() {
+        _uiState.value = estado.copy(mostrarModalNovaTarefa = true, erroNovaTarefa = null)
     }
 
-    // ---------- Auxiliares de parsing JSON ----------
+    fun fecharModalNovaTarefa() {
+        if (estado.isCriandoNovaTarefa) return
+        _uiState.value = estado.copy(mostrarModalNovaTarefa = false, erroNovaTarefa = null)
+    }
+
+    fun criarNovaTarefaPaciente(
+        context: Context,
+        token: String?,
+        titulo: String,
+        prazoIso: String?,
+        anexoUri: Uri?
+    ) {
+        if (estado.isCriandoNovaTarefa) return
+
+        val tk = token?.takeIf { it.isNotBlank() }
+        if (tk == null) {
+            _uiState.value = estado.copy(erroNovaTarefa = "Sessão expirada. Entre novamente.")
+            return
+        }
+        if (titulo.isBlank()) {
+            _uiState.value = estado.copy(erroNovaTarefa = "Informe o título da tarefa.")
+            return
+        }
+        if (prazoIso == null) {
+            _uiState.value = estado.copy(
+                erroNovaTarefa = "Informe uma data de entrega válida (dd/mm/aaaa), a partir de hoje."
+            )
+            return
+        }
+
+        _uiState.value = estado.copy(isCriandoNovaTarefa = true, erroNovaTarefa = null)
+        val appContext = context.applicationContext
+
+        // a leitura do arquivo não pode rodar na thread principal
+        Thread {
+            val anexo: MultipartBody.Part? = try {
+                anexoUri?.let { lerAnexo(appContext, it) }
+            } catch (e: AnexoInvalido) {
+                _uiState.postValue(estado.copy(isCriandoNovaTarefa = false, erroNovaTarefa = e.message))
+                return@Thread
+            } catch (e: Exception) {
+                _uiState.postValue(
+                    estado.copy(isCriandoNovaTarefa = false, erroNovaTarefa = "Não foi possível ler o arquivo selecionado.")
+                )
+                return@Thread
+            }
+            enviarNovaTarefa(tk, titulo.trim(), prazoIso, anexo)
+        }.start()
+    }
+
+    private fun enviarNovaTarefa(token: String, titulo: String, prazoIso: String, anexo: MultipartBody.Part?) {
+        val texto = "text/plain".toMediaTypeOrNull()
+
+        service.criarTarefaByToken(
+            token = token,
+            titulo = titulo.toRequestBody(texto),
+            tipo = "texto".toRequestBody(texto),
+            instrucoes = null,
+            isRascunho = "0".toRequestBody(texto),
+            // o back faz JSON.parse nesses dois campos: se faltarem, a requisição quebra
+            pacienteIds = "[]".toRequestBody(texto),
+            prazosPorPaciente = "[]".toRequestBody(texto),
+            anexoArquivo = anexo,
+            prazo = prazoIso.toRequestBody(texto)
+        ).enqueue(object : Callback<JsonObject> {
+            override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
+                if (response.isSuccessful) {
+                    _uiState.value = estado.copy(
+                        isCriandoNovaTarefa = false,
+                        mostrarModalNovaTarefa = false,
+                        erroNovaTarefa = null,
+                        toastMensagem = "Tarefa adicionada"
+                    )
+                    carregarTarefas(token)
+                } else {
+                    _uiState.value = estado.copy(
+                        isCriandoNovaTarefa = false,
+                        erroNovaTarefa = mensagemDeErro(response, "Não foi possível criar a tarefa")
+                    )
+                }
+            }
+
+            override fun onFailure(call: Call<JsonObject>, t: Throwable) {
+                _uiState.value = estado.copy(isCriandoNovaTarefa = false, erroNovaTarefa = "Sem conexão com o servidor.")
+            }
+        })
+    }
+
+    private class AnexoInvalido(mensagem: String) : Exception(mensagem)
+
+    private fun lerAnexo(context: Context, uri: Uri): MultipartBody.Part {
+        val resolver = context.contentResolver
+        val nome = nomeDoArquivo(context, uri) ?: "anexo"
+        val mime = resolver.getType(uri) ?: "application/octet-stream"
+        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+            ?: throw AnexoInvalido("Não foi possível ler o arquivo selecionado.")
+        if (bytes.size > TAMANHO_MAX_ANEXO_BYTES) throw AnexoInvalido("O arquivo deve ter no máximo 10 MB.")
+
+        // o back (multer) espera o campo com o nome "anexo_arquivo"
+        return MultipartBody.Part.createFormData("anexo_arquivo", nome, bytes.toRequestBody(mime.toMediaTypeOrNull()))
+    }
+
+    fun limparToast() {
+        _uiState.value = estado.copy(toastMensagem = null)
+    }
+
+    // ---------- Dados de demonstração (só com USAR_DADOS_DEMO = true) ----------
+
+    private fun criarTarefasDemonstracao(): List<TarefaItemDto> = listOf(
+        TarefaItemDto(
+            id = 1, titulo = "Diário de Humor Semanal", profissionalNome = "Carlos Eduardo Mendes",
+            tipo = "formulario", idTarefaDestinatario = 101, prazo = "2026-09-07", status = "em_andamento", progresso = 60
+        ),
+        TarefaItemDto(
+            id = 2, titulo = "Escala de Ansiedade de Beck", profissionalNome = "Carlos Eduardo Mendes",
+            tipo = "formulario", idTarefaDestinatario = 102, prazo = "2026-09-15", status = "pendente", progresso = 0
+        ),
+        TarefaItemDto(
+            id = 3, titulo = "Registro de Pensamentos Automáticos", profissionalNome = "Carlos Eduardo Mendes",
+            tipo = "formulario", idTarefaDestinatario = 103, prazo = "2026-08-30", status = "concluida", progresso = 100
+        ),
+        TarefaItemDto(
+            id = 4, titulo = "Questionário de Qualidade de Sono", profissionalNome = "Carlos Eduardo Mendes",
+            tipo = "formulario", idTarefaDestinatario = 104, prazo = "2026-09-01", status = "atrasada", progresso = 30
+        )
+    )
+
+    private fun criarPerguntasDemonstracao(): List<PerguntaDto> = listOf(
+        PerguntaDto(
+            id = 1, enunciado = "Como você avalia seu humor nos últimos 7 dias?", tipo = "humor",
+            opcoes = listOf(OpcaoPerguntaDto(1, "Mal"), OpcaoPerguntaDto(2, "Neutro"), OpcaoPerguntaDto(3, "Bem"))
+        ),
+        PerguntaDto(
+            id = 2, enunciado = "Quais atividades realizou durante a semana?", tipo = "multipla_escolha",
+            obrigatoria = false,
+            opcoes = listOf(
+                OpcaoPerguntaDto(10, "Exercício físico"), OpcaoPerguntaDto(11, "Leitura"),
+                OpcaoPerguntaDto(12, "Meditação"), OpcaoPerguntaDto(13, "Socialização"),
+                OpcaoPerguntaDto(14, "Hobbies"), OpcaoPerguntaDto(15, "Descanso")
+            )
+        ),
+        PerguntaDto(id = 3, enunciado = "Descreva como se sentiu predominantemente esta semana:", tipo = "texto"),
+        PerguntaDto(id = 4, enunciado = "Em uma escala de 0 a 10, qual foi seu nível de ansiedade?", tipo = "escala")
+    )
+
+    // ---------- Auxiliares ----------
+
+    /** O back devolve { message, field, ... } nos erros 4xx/5xx. */
+    private fun mensagemDeErro(response: Response<*>, padrao: String): String {
+        val json: JsonObject? = try {
+            val errStr = response.errorBody()?.string()
+            if (!errStr.isNullOrBlank()) JsonParser().parse(errStr).asJsonObject else null
+        } catch (e: Exception) { null }
+
+        val msg = json?.get("message")?.let { if (it.isJsonPrimitive) it.asString else null }
+        val campo = json?.get("field")?.let { if (it.isJsonPrimitive) it.asString else null }
+        val texto = listOfNotNull(msg, campo).joinToString(" ").trim()
+        return if (texto.isNotBlank()) texto else "$padrao (erro ${response.code()})."
+    }
 
     private fun findArray(node: JsonElement?, vararg keys: String): JsonArray {
         if (node == null || node.isJsonNull) return JsonArray()
@@ -294,26 +675,49 @@ class TarefasPacienteViewModel : ViewModel() {
         return 0
     }
 
+    private fun parseAttrBool(obj: JsonObject, chave: String, padrao: Boolean): Boolean {
+        if (!obj.has(chave) || obj.get(chave).isJsonNull) return padrao
+        val s = runCatching { obj.get(chave).asString.trim().lowercase() }.getOrNull() ?: return padrao
+        return when (s) {
+            "1", "true" -> true
+            "0", "false" -> false
+            else -> padrao
+        }
+    }
+
+    fun marcarComoConcluida(token: String?, tarefa: TarefaItemDto) {
+        val idDestinatario = tarefa.idTarefaDestinatario?.takeIf { it > 0 } ?: tarefa.id
+        val atualizacao = JsonObject().apply { addProperty("status", "concluida") }
+
+        service.atualizarStatusTarefaDestinatario(idDestinatario, atualizacao, token).enqueue(object : Callback<JsonObject> {
+            override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
+                _uiState.value = estado.copy(toastMensagem = "✓ Tarefa concluída")
+                carregarTarefas(token)
+            }
+            override fun onFailure(call: Call<JsonObject>, t: Throwable) {
+                val lista = estado.tarefas.map { item ->
+                    if (item.id == tarefa.id) item.copy(status = "concluida", progresso = 100) else item
+                }
+                _uiState.value = estado.copy(tarefas = lista, toastMensagem = "✓ Tarefa concluída")
+            }
+        })
+    }
+
     private fun parseAttrString(obj: JsonObject, vararg keys: String): String? {
         for (k in keys) {
             if (obj.has(k) && !obj.get(k).isJsonNull) {
-                val s = obj.get(k).asString.trim()
+                val s = try { obj.get(k).asString.trim() } catch (e: Exception) { "" }
                 if (s.isNotBlank() && s.lowercase() != "null") return s
             }
         }
         return null
     }
-
-    private fun parseErrorMsg(errorBody: String?): String? {
-        if (errorBody.isNullOrBlank()) return null
-        return try {
-            val json = JsonParser().parse(errorBody).asJsonObject
-            when {
-                json.has("message") -> json.get("message").asString
-                json.has("erro") -> json.get("erro").asString
-                json.has("error") -> json.get("error").asString
-                else -> null
-            }
-        } catch (e: Exception) { null }
-    }
 }
+
+/** Nome exibível do arquivo escolhido no seletor (usado pela tela e pelo upload). */
+internal fun nomeDoArquivo(context: Context, uri: Uri): String? =
+    runCatching {
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(0) else null
+        }
+    }.getOrNull() ?: uri.lastPathSegment

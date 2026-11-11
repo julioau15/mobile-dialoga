@@ -65,7 +65,7 @@ interface PacienteService {
     @GET("tarefas")
     fun getMinhasTarefas(@Header("x-access-token") token: String): Call<JsonObject>
 
-    // Trocar por "pacientes/me/consultas" depois de criar a rota no back (ver correcoes-backend.md, item 3).
-    @GET("consultas")
+    // Rota por token (o GET /consultas do back ignora o token e devolve as consultas de todos).
+    @GET("pacientes/me/consultas")
     fun getMinhasConsultas(@Header("x-access-token") token: String): Call<JsonObject>
 }
