@@ -22,12 +22,6 @@ import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
 
-/**
- * true = se a API falhar, mostra tarefas/perguntas de demonstração (útil só para apresentar sem back).
- * Em uso normal deixe false: os dados de demonstração escondem erros reais (token, 404, 500...).
- */
-private const val USAR_DADOS_DEMO = false
-
 private const val TAMANHO_MAX_ANEXO_BYTES = 10 * 1024 * 1024 // 10 MB
 
 data class TarefasPacienteUiState(
@@ -97,13 +91,11 @@ class TarefasPacienteViewModel : ViewModel() {
                 when {
                     response.isSuccessful -> {
                         val lista = converterTarefas(response.body())
-                        val listaFinal = if (lista.isEmpty() && USAR_DADOS_DEMO) criarTarefasDemonstracao() else lista
-                        _uiState.value = estado.copy(isLoading = false, tarefas = listaFinal, erroGeral = null)
+                        _uiState.value = estado.copy(isLoading = false, tarefas = lista, erroGeral = null)
                     }
                     // o back responde 404 quando o paciente ainda não tem tarefas
                     response.code() == 404 -> {
-                        val listaFinal = if (USAR_DADOS_DEMO) criarTarefasDemonstracao() else emptyList()
-                        _uiState.value = estado.copy(isLoading = false, tarefas = listaFinal, erroGeral = null)
+                        _uiState.value = estado.copy(isLoading = false, tarefas = emptyList(), erroGeral = null)
                     }
                     else -> falhaAoCarregarLista(
                         mensagemDeErro(response, "Não foi possível carregar as tarefas")
@@ -118,11 +110,7 @@ class TarefasPacienteViewModel : ViewModel() {
     }
 
     private fun falhaAoCarregarLista(mensagem: String) {
-        _uiState.value = if (USAR_DADOS_DEMO) {
-            estado.copy(isLoading = false, tarefas = criarTarefasDemonstracao(), erroGeral = null)
-        } else {
-            estado.copy(isLoading = false, erroGeral = mensagem)
-        }
+        _uiState.value = estado.copy(isLoading = false, erroGeral = mensagem)
     }
 
     private fun converterTarefas(json: JsonObject?): List<TarefaItemDto> {
@@ -198,14 +186,12 @@ class TarefasPacienteViewModel : ViewModel() {
 
                 when {
                     response.isSuccessful -> {
-                        var perguntas = converterPerguntas(response.body())
-                        if (perguntas.isEmpty() && USAR_DADOS_DEMO) perguntas = criarPerguntasDemonstracao()
+                        val perguntas = converterPerguntas(response.body())
                         carregarRespostasAnteriores(token, idDestinatario, perguntas)
                     }
                     // 404 = tarefa sem perguntas
                     response.code() == 404 -> {
-                        val perguntas = if (USAR_DADOS_DEMO) criarPerguntasDemonstracao() else emptyList()
-                        carregarRespostasAnteriores(token, idDestinatario, perguntas)
+                        carregarRespostasAnteriores(token, idDestinatario, emptyList())
                     }
                     else -> falhaAoCarregarDetalhes(
                         mensagemDeErro(response, "Não foi possível carregar as perguntas")
@@ -593,45 +579,6 @@ class TarefasPacienteViewModel : ViewModel() {
     fun limparToast() {
         _uiState.value = estado.copy(toastMensagem = null)
     }
-
-    // ---------- Dados de demonstração (só com USAR_DADOS_DEMO = true) ----------
-
-    private fun criarTarefasDemonstracao(): List<TarefaItemDto> = listOf(
-        TarefaItemDto(
-            id = 1, titulo = "Diário de Humor Semanal", profissionalNome = "Carlos Eduardo Mendes",
-            tipo = "formulario", idTarefaDestinatario = 101, prazo = "2026-09-07", status = "em_andamento", progresso = 60
-        ),
-        TarefaItemDto(
-            id = 2, titulo = "Escala de Ansiedade de Beck", profissionalNome = "Carlos Eduardo Mendes",
-            tipo = "formulario", idTarefaDestinatario = 102, prazo = "2026-09-15", status = "pendente", progresso = 0
-        ),
-        TarefaItemDto(
-            id = 3, titulo = "Registro de Pensamentos Automáticos", profissionalNome = "Carlos Eduardo Mendes",
-            tipo = "formulario", idTarefaDestinatario = 103, prazo = "2026-08-30", status = "concluida", progresso = 100
-        ),
-        TarefaItemDto(
-            id = 4, titulo = "Questionário de Qualidade de Sono", profissionalNome = "Carlos Eduardo Mendes",
-            tipo = "formulario", idTarefaDestinatario = 104, prazo = "2026-09-01", status = "atrasada", progresso = 30
-        )
-    )
-
-    private fun criarPerguntasDemonstracao(): List<PerguntaDto> = listOf(
-        PerguntaDto(
-            id = 1, enunciado = "Como você avalia seu humor nos últimos 7 dias?", tipo = "humor",
-            opcoes = listOf(OpcaoPerguntaDto(1, "Mal"), OpcaoPerguntaDto(2, "Neutro"), OpcaoPerguntaDto(3, "Bem"))
-        ),
-        PerguntaDto(
-            id = 2, enunciado = "Quais atividades realizou durante a semana?", tipo = "multipla_escolha",
-            obrigatoria = false,
-            opcoes = listOf(
-                OpcaoPerguntaDto(10, "Exercício físico"), OpcaoPerguntaDto(11, "Leitura"),
-                OpcaoPerguntaDto(12, "Meditação"), OpcaoPerguntaDto(13, "Socialização"),
-                OpcaoPerguntaDto(14, "Hobbies"), OpcaoPerguntaDto(15, "Descanso")
-            )
-        ),
-        PerguntaDto(id = 3, enunciado = "Descreva como se sentiu predominantemente esta semana:", tipo = "texto"),
-        PerguntaDto(id = 4, enunciado = "Em uma escala de 0 a 10, qual foi seu nível de ansiedade?", tipo = "escala")
-    )
 
     // ---------- Auxiliares ----------
 

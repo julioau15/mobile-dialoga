@@ -329,6 +329,15 @@ class AuthState(private val context: Context) {
         }
     }
 
+    private fun JsonElement?.asSafeString(): String? {
+        if (this == null || isJsonNull) return null
+        return try {
+            if (isJsonPrimitive) asString.trim() else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private fun extractProfileFromJson(element: JsonElement?, padrao: Boolean): UserProfile? {
         if (element == null || element.isJsonNull) return null
 
@@ -337,9 +346,17 @@ class AuthState(private val context: Context) {
             if (!node.isJsonObject) return null
             val obj = node.asJsonObject
 
-            val nome = listOf("nome_completo", "nome").firstOrNull { obj.has(it) && !obj.get(it).isJsonNull }?.let { obj.get(it).asString }
-            val apelido = listOf("apelido", "nickname").firstOrNull { obj.has(it) && !obj.get(it).isJsonNull }?.let { obj.get(it).asString }
-            val foto = listOf("foto_avatar", "foto").firstOrNull { obj.has(it) && !obj.get(it).isJsonNull }?.let { obj.get(it).asString }
+            val nomeKeys = listOf("nome_completo", "nome", "nome_usuario", "usuario_nome", "nome_profissional", "profissional_nome")
+            val nomeRaw = nomeKeys.firstNotNullOfOrNull { key -> obj.get(key)?.asSafeString() }
+            val nome = if (nomeRaw.isNullOrBlank() || nomeRaw.lowercase() == "null" || nomeRaw.lowercase() == "undefined") null else nomeRaw
+
+            val apelidoKeys = listOf("apelido", "nickname", "nome_social")
+            val apelidoRaw = apelidoKeys.firstNotNullOfOrNull { key -> obj.get(key)?.asSafeString() }
+            val apelido = if (apelidoRaw.isNullOrBlank() || apelidoRaw.lowercase() == "null" || apelidoRaw.lowercase() == "undefined") null else apelidoRaw
+
+            val fotoKeys = listOf("foto_avatar", "foto", "avatar", "imagem")
+            val fotoRaw = fotoKeys.firstNotNullOfOrNull { key -> obj.get(key)?.asSafeString() }
+            val foto = if (fotoRaw.isNullOrBlank() || fotoRaw.lowercase() == "null" || fotoRaw.lowercase() == "undefined") null else fotoRaw
 
             val concluido = listOf("primeiro_acesso_concluido", "concluido", "concluiu_onboarding")
                 .firstOrNull { obj.has(it) }?.let { obj.get(it).asFlexBoolean() }
@@ -362,9 +379,10 @@ class AuthState(private val context: Context) {
                 return UserProfile(nome = nome, apelido = apelido, foto = foto, primeiroAcesso = primeiroAcesso)
             }
 
-            for (key in listOf("response", "auth", "paciente", "profissional", "usuario", "dados", "data")) {
-                if (obj.has(key)) {
-                    val p = findProfile(obj.get(key))
+            for (key in obj.keySet()) {
+                val value = obj.get(key)
+                if (value != null && (value.isJsonObject || value.isJsonArray)) {
+                    val p = findProfile(value)
                     if (p != null) return p
                 }
             }

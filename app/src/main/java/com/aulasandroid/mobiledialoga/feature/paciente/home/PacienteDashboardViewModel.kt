@@ -66,8 +66,12 @@ class PacienteDashboardViewModel : ViewModel() {
             val listaTarefas = DashboardMapper.tarefas(tarefas)
             val registros = DashboardMapper.registrosHumor(humor)
 
+            val nomeAtualizado = authState.userProfile?.getNomeExibicao()
+                ?.trim()?.substringBefore(" ").orEmpty().ifBlank { "Paciente" }
+
             state = state.copy(
                 isLoading = false,
+                nomeUsuario = if (nomeAtualizado != "Paciente") nomeAtualizado else state.nomeUsuario,
                 indicadoresHoje = DashboardMapper.indicadoresHoje(registros),
                 sonoSemana = DashboardMapper.sonoSemana(registros),
                 estatisticas = EstatisticasGerais(

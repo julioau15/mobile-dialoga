@@ -12,14 +12,18 @@ data class UserProfile(
 ) {
     /**
      * Retorna o nome de exibição:
-     * 1. Se tiver apelido, utiliza o apelido.
+     * 1. Se tiver apelido válido, utiliza o apelido.
      * 2. Se não tiver, utiliza os dois primeiros nomes do nome completo.
      */
     fun getNomeExibicao(): String {
-        if (!apelido.isNullOrBlank()) {
-            return apelido.trim()
+        val ap = apelido?.trim()
+        if (!ap.isNullOrBlank() && ap.lowercase() != "null" && ap.lowercase() != "undefined") {
+            return ap
         }
-        val nomeLimpo = nome?.trim() ?: return "Usuário"
+        val nomeLimpo = nome?.trim()
+        if (nomeLimpo.isNullOrBlank() || nomeLimpo.lowercase() == "null" || nomeLimpo.lowercase() == "undefined") {
+            return "Usuário"
+        }
         val partes = nomeLimpo.split("\\s+".toRegex()).filter { it.isNotBlank() }
         return when {
             partes.size >= 2 -> "${partes[0]} ${partes[1]}"
@@ -32,8 +36,9 @@ data class UserProfile(
      * Retorna as iniciais dos dois primeiros nomes para desenhar o círculo de perfil
      */
     fun getIniciais(): String {
-        val nomeCompletoOuApelido = if (!apelido.isNullOrBlank()) {
-            apelido.trim()
+        val ap = apelido?.trim()
+        val nomeCompletoOuApelido = if (!ap.isNullOrBlank() && ap.lowercase() != "null" && ap.lowercase() != "undefined") {
+            ap
         } else {
             nome?.trim() ?: ""
         }
@@ -56,7 +61,7 @@ data class UserProfile(
      */
     fun getFotoUrlCompleta(): String? {
         val f = foto?.trim() ?: return null
-        if (f.isBlank()) return null
+        if (f.isBlank() || f.lowercase() == "null" || f.lowercase() == "undefined") return null
         if (f.startsWith("http://") || f.startsWith("https://") || f.startsWith("data:image")) {
             return f
         }
