@@ -113,7 +113,7 @@ fun PacienteScreen(onLogout: () -> Unit) {
             PacienteSubRota.AGENDA -> ConsultasPacienteScreen(modifier = modifier)
             PacienteSubRota.PROFISSIONAIS -> BuscaProfissionaisScreen(modifier = modifier)
             PacienteSubRota.TAREFAS -> TarefasPacienteScreen(modifier = modifier)
-            PacienteSubRota.NOTIFICACOES -> NotificacoesPacienteScreen(modifier = modifier)
+            PacienteSubRota.NOTIFICACOES -> NotificacoesPacienteScreen(onNavigate = { subRotaAtual = it }, modifier = modifier)
             PacienteSubRota.PERFIL -> PerfilPacienteScreen(modifier = modifier)
         }
 

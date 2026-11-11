@@ -1,17 +1,27 @@
 package com.aulasandroid.mobiledialoga.feature.profissional.notificacoes
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.aulasandroid.mobiledialoga.components.ScreenContentCard
+import com.aulasandroid.mobiledialoga.feature.notificacoes.DestinoNotificacao
+import com.aulasandroid.mobiledialoga.feature.notificacoes.NotificacoesScreen
+import com.aulasandroid.mobiledialoga.feature.notificacoes.PerfilNotificacao
+import com.aulasandroid.mobiledialoga.feature.profissional.ProfissionalSubRota
 
 @Composable
-fun NotificacoesProfissionalScreen(modifier: Modifier = Modifier) {
-    ScreenContentCard(
-        nomeTela = "Notificações",
-        descricao = "Alertas e avisos do profissional",
-        icone = Icons.Default.Notifications,
-        modifier = modifier
+fun NotificacoesProfissionalScreen(
+    onNavigate: (ProfissionalSubRota) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    NotificacoesScreen(
+        perfil = PerfilNotificacao.PROFISSIONAL,
+        modifier = modifier,
+        onVer = { destino ->
+            when (destino) {
+                DestinoNotificacao.AGENDA -> onNavigate(ProfissionalSubRota.AGENDA)
+                DestinoNotificacao.TAREFAS -> onNavigate(ProfissionalSubRota.TAREFAS)
+                DestinoNotificacao.PESSOAS -> onNavigate(ProfissionalSubRota.PACIENTES)
+                DestinoNotificacao.TRATAMENTO -> Unit // profissional não tem tela de tratamento
+            }
+        }
     )
 }
