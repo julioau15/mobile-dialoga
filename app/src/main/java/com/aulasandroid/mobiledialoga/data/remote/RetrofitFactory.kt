@@ -14,4 +14,5 @@ class RetrofitFactory {
     fun getEspecialidadeService(): EspecialidadeService = retrofit.create(EspecialidadeService::class.java)
     fun getPacienteService(): PacienteService = retrofit.create(PacienteService::class.java)
     fun getProfissionalService(): ProfissionalService = retrofit.create(ProfissionalService::class.java)
+    fun getAgendaService(): AgendaService = retrofit.create(AgendaService::class.java)
 }
