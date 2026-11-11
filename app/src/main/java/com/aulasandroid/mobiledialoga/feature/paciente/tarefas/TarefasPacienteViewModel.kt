@@ -3,6 +3,7 @@ package com.aulasandroid.mobiledialoga.feature.paciente.tarefas
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import android.util.Base64
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -21,6 +22,9 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.Call
 import retrofit2.Callback
 import retrofit2.Response
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private const val TAMANHO_MAX_ANEXO_BYTES = 10 * 1024 * 1024 // 10 MB
 
@@ -30,6 +34,7 @@ data class TarefasPacienteUiState(
     val isLoading: Boolean = false,
     val erroGeral: String? = null,
     val toastMensagem: String? = null,
+    val toastErro: Boolean = false,
     // Tela de resposta em tela cheia
     val tarefaEmEdicao: TarefaItemDto? = null,
     val perguntas: List<PerguntaDto> = emptyList(),
@@ -577,7 +582,7 @@ class TarefasPacienteViewModel : ViewModel() {
     }
 
     fun limparToast() {
-        _uiState.value = estado.copy(toastMensagem = null)
+        _uiState.value = estado.copy(toastMensagem = null, toastErro = false)
     }
 
     // ---------- Auxiliares ----------
@@ -632,23 +637,70 @@ class TarefasPacienteViewModel : ViewModel() {
         }
     }
 
-    fun marcarComoConcluida(token: String?, tarefa: TarefaItemDto) {
-        val idDestinatario = tarefa.idTarefaDestinatario?.takeIf { it > 0 } ?: tarefa.id
-        val atualizacao = JsonObject().apply { addProperty("status", "concluida") }
+    // evita dois PUTs seguidos se o paciente tocar mais de uma vez no botão
+    private val concluindoIds = mutableSetOf<Int>()
 
-        service.atualizarStatusTarefaDestinatario(idDestinatario, atualizacao, token).enqueue(object : Callback<JsonObject> {
+    /**
+     * Marca a tarefa como concluída. O PUT /tarefas-destinatarios/{id} do back substitui o registro inteiro e valida
+     * status + id_tarefa + id_paciente, então enviamos todos os campos (mandar só "status" dava 400 e o app
+     * mostrava "concluída" mesmo assim, porque a resposta nunca era conferida).
+     */
+    fun marcarComoConcluida(token: String?, tarefa: TarefaItemDto) {
+        val tk = token?.takeIf { it.isNotBlank() }
+        if (tk == null) {
+            _uiState.value = estado.copy(toastMensagem = "Sessão expirada. Entre novamente.", toastErro = true)
+            return
+        }
+        val idDestinatario = tarefa.idTarefaDestinatario?.takeIf { it > 0 } ?: tarefa.id
+        val idPaciente = idDoToken(tk)
+        if (idPaciente == null) {
+            _uiState.value = estado.copy(toastMensagem = "Sessão inválida. Entre novamente.", toastErro = true)
+            return
+        }
+        if (!concluindoIds.add(idDestinatario)) return
+
+        val atualizacao = JsonObject().apply {
+            addProperty("status", "concluida")
+            addProperty("id_tarefa", tarefa.id)
+            addProperty("id_paciente", idPaciente)
+            addProperty("data_conclusao", agoraParaBanco())
+            tarefa.prazo?.take(10)?.takeIf { it.length == 10 }?.let { addProperty("prazo", it) }
+        }
+
+        service.atualizarStatusTarefaDestinatario(idDestinatario, atualizacao, tk).enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
-                _uiState.value = estado.copy(toastMensagem = "✓ Tarefa concluída")
-                carregarTarefas(token)
-            }
-            override fun onFailure(call: Call<JsonObject>, t: Throwable) {
-                val lista = estado.tarefas.map { item ->
-                    if (item.id == tarefa.id) item.copy(status = "concluida", progresso = 100) else item
+                concluindoIds.remove(idDestinatario)
+                if (response.isSuccessful) {
+                    // atualiza a lista na hora e confirma com o back em seguida
+                    val lista = estado.tarefas.map { item ->
+                        if (item.id == tarefa.id) item.copy(status = "concluida", progresso = 100) else item
+                    }
+                    _uiState.value = estado.copy(tarefas = lista, toastMensagem = "Tarefa concluída", toastErro = false)
+                    carregarTarefas(tk)
+                } else {
+                    _uiState.value = estado.copy(
+                        toastMensagem = mensagemDeErro(response, "Não foi possível concluir a tarefa"),
+                        toastErro = true
+                    )
                 }
-                _uiState.value = estado.copy(tarefas = lista, toastMensagem = "✓ Tarefa concluída")
+            }
+
+            override fun onFailure(call: Call<JsonObject>, t: Throwable) {
+                concluindoIds.remove(idDestinatario)
+                _uiState.value = estado.copy(toastMensagem = "Sem conexão com o servidor.", toastErro = true)
             }
         })
     }
+
+    /** O JWT do back leva o id (e o nível) do usuário no payload; usado para preencher id_paciente. */
+    private fun idDoToken(token: String): Int? = runCatching {
+        val payload = token.split(".")[1]
+        val json = String(Base64.decode(payload, Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP), Charsets.UTF_8)
+        JsonParser().parse(json).asJsonObject.get("id").asInt
+    }.getOrNull()?.takeIf { it > 0 }
+
+    private fun agoraParaBanco(): String =
+        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
 
     private fun parseAttrString(obj: JsonObject, vararg keys: String): String? {
         for (k in keys) {

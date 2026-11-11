@@ -86,10 +86,10 @@ import com.aulasandroid.mobiledialoga.components.DialogaOutlinedButton
 import com.aulasandroid.mobiledialoga.components.DialogaTextField
 import com.aulasandroid.mobiledialoga.components.FormatoCampo
 import com.aulasandroid.mobiledialoga.components.coresCampo
+import com.aulasandroid.mobiledialoga.components.CampoDataCalendario
 import com.aulasandroid.mobiledialoga.data.useAuth
 import com.aulasandroid.mobiledialoga.feature.paciente.tarefas.model.PerguntaDto
 import com.aulasandroid.mobiledialoga.feature.paciente.tarefas.model.TarefaItemDto
-import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.DataVisualTransformation
 import com.aulasandroid.mobiledialoga.ui.theme.CorBorda
 import com.aulasandroid.mobiledialoga.ui.theme.CorBordaCard
 import com.aulasandroid.mobiledialoga.ui.theme.CorErro
@@ -324,12 +324,12 @@ private fun ListaDeTarefas(
                     .align(Alignment.Center)
                     .padding(24.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF047857))
+                    .background(if (estado.toastErro) Color(0xFFB91C1C) else Color(0xFF047857))
                     .clickable(onClick = onFecharToast)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    imageVector = if (estado.toastErro) Icons.Default.Close else Icons.Default.Check,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
@@ -1117,15 +1117,13 @@ private fun ModalNovaTarefaPaciente(
 ) {
     val context = LocalContext.current
     var titulo by remember { mutableStateOf("") }
-    var prazoDigitos by remember { mutableStateOf("") }
+    var prazoIso by remember { mutableStateOf<String?>(null) }
     var anexoUri by remember { mutableStateOf<Uri?>(null) }
 
     val nomeAnexo = remember(anexoUri) { anexoUri?.let { nomeDoArquivo(context, it) } }
     val seletorDeArquivo = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) anexoUri = uri
     }
-
-    val prazoIso = prazoDigitosParaIso(prazoDigitos)
 
     Dialog(
         onDismissRequest = { if (!criando) onFechar() },
@@ -1168,14 +1166,11 @@ private fun ModalNovaTarefaPaciente(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                DialogaTextField(
+                CampoDataCalendario(
                     rotulo = "Data de entrega *",
-                    placeholder = "dd/mm/aaaa",
-                    value = prazoDigitos,
-                    onValueChange = { p -> prazoDigitos = p.filter { it.isDigit() }.take(8) },
-                    keyboardType = KeyboardType.Number,
-                    visualTransformation = DataVisualTransformation(),
-                    erro = if (prazoDigitos.length == 8 && prazoIso == null) "Informe uma data válida, a partir de hoje." else null,
+                    prazoIso = prazoIso,
+                    onPrazoChange = { prazoIso = it },
+                    enabled = !criando,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -1272,40 +1267,4 @@ private fun Modifier.bordaTracejada(cor: Color, raio: Dp): Modifier = this.drawB
             pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 9f), 0f)
         )
     )
-}
-
-/**
- * "10112026" -> "2026-11-10". Aceita de hoje até 5 anos à frente.
- * (O dataDigitosParaIso existente é para data de nascimento: rejeita qualquer data futura,
- * por isso não serve para prazo de tarefa.)
- */
-internal fun prazoDigitosParaIso(digitos: String): String? {
-    if (digitos.length != 8) return null
-    val dia = digitos.substring(0, 2).toIntOrNull() ?: return null
-    val mes = digitos.substring(2, 4).toIntOrNull() ?: return null
-    val ano = digitos.substring(4, 8).toIntOrNull() ?: return null
-
-    val anoAtual = Calendar.getInstance().get(Calendar.YEAR)
-    if (ano < anoAtual || ano > anoAtual + 5) return null
-
-    val cal = Calendar.getInstance().apply {
-        isLenient = false
-        clear()
-        set(ano, mes - 1, dia)
-    }
-    val data = try {
-        cal.time // com isLenient = false, 31/02 e similares lançam exceção aqui
-    } catch (e: Exception) {
-        return null
-    }
-
-    val inicioDeHoje = Calendar.getInstance().apply {
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.time
-    if (data.before(inicioDeHoje)) return null
-
-    return String.format(Locale.US, "%04d-%02d-%02d", ano, mes, dia)
 }

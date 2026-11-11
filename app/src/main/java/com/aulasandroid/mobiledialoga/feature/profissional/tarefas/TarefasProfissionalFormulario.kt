@@ -1,6 +1,5 @@
 package com.aulasandroid.mobiledialoga.feature.profissional.tarefas
 
-import android.app.DatePickerDialog
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -44,29 +42,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.aulasandroid.mobiledialoga.components.CampoDataCalendario
 import com.aulasandroid.mobiledialoga.components.FormatoCampo
 import com.aulasandroid.mobiledialoga.components.coresCampo
-import com.aulasandroid.mobiledialoga.feature.paciente.tarefas.prazoDigitosParaIso
-import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.DataVisualTransformation
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.model.PacienteOpcaoDto
 import com.aulasandroid.mobiledialoga.ui.theme.CorBorda
 import com.aulasandroid.mobiledialoga.ui.theme.CorPrimaria
 import com.aulasandroid.mobiledialoga.ui.theme.CorPrimariaClara
 import com.aulasandroid.mobiledialoga.ui.theme.CorSecundaria
 import com.aulasandroid.mobiledialoga.ui.theme.CorTexto
-import java.util.Calendar
-import java.util.Locale
 
 private sealed interface EtapaEnvio {
     data class Prazo(val indice: Int) : EtapaEnvio
@@ -486,9 +479,7 @@ private fun ModalPrazo(
     onSemPrazo: () -> Unit,
     onAdicionar: (iso: String) -> Unit
 ) {
-    val context = LocalContext.current
-    var digitos by remember { mutableStateOf("") }
-    val iso = prazoDigitosParaIso(digitos)
+    var iso by remember { mutableStateOf<String?>(null) }
 
     CascaModal(
         titulo = "Adicionar prazo?",
@@ -503,30 +494,11 @@ private fun ModalPrazo(
                 fontSize = 14.sp, color = CorSecundaria, lineHeight = 20.sp
             )
             Spacer(Modifier.height(14.dp))
-            OutlinedTextField(
-                value = digitos,
-                onValueChange = { digitos = it.filter { c -> c.isDigit() }.take(8) },
-                placeholder = { Text("dd/mm/aaaa", fontSize = 14.sp) },
-                singleLine = true,
-                visualTransformation = DataVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                trailingIcon = {
-                    IconButton(onClick = {
-                        val hoje = Calendar.getInstance()
-                        DatePickerDialog(context, { _, a, m, d ->
-                            digitos = String.format(Locale.US, "%02d%02d%04d", d, m + 1, a)
-                        }, hoje.get(Calendar.YEAR), hoje.get(Calendar.MONTH), hoje.get(Calendar.DAY_OF_MONTH))
-                            .apply { datePicker.minDate = hoje.timeInMillis - 1000 }
-                            .show()
-                    }) { Icon(Icons.Default.DateRange, contentDescription = "Escolher data", tint = CorTexto) }
-                },
-                shape = FormatoCampo,
-                colors = coresCampo(),
+            CampoDataCalendario(
+                prazoIso = iso,
+                onPrazoChange = { iso = it },
                 modifier = Modifier.fillMaxWidth()
             )
-            if (digitos.length == 8 && iso == null) {
-                Text("Data inválida ou já passou.", fontSize = 12.sp, color = Color(0xFFDC2626), modifier = Modifier.padding(top = 4.dp, start = 4.dp))
-            }
         },
         rodape = {
             BotaoPilula("Sem prazo", onSemPrazo, primario = false, modifier = Modifier.height(42.dp))
