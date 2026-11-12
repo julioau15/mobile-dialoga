@@ -26,4 +26,11 @@ interface SolicitacaoAcessoService {
 
     @PUT("solicitacoes-acesso/{id}/recusar")
     fun recusarSolicitacaoAcesso(@Path("id") id: Int): Call<JsonObject>
+
+    // O profissional logado pede acesso aos indicadores de um paciente
+    @POST("pacientes/{id}/solicitacoes-acesso")
+    fun solicitarAcessoAoPaciente(
+        @Header("x-access-token") token: String,
+        @Path("id") idPaciente: Int
+    ): Call<JsonObject>
 }

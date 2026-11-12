@@ -34,4 +34,19 @@ interface AnotacaoService {
 
     @DELETE("anotacoes/{id}")
     fun excluirAnotacao(@Path("id") id: Int): Call<JsonObject>
+
+    // Anotações privadas do profissional logado sobre um paciente (o back responde 404 quando não há nenhuma)
+    @GET("pacientes/{id}/anotacoes")
+    fun listarAnotacoesDoPaciente(
+        @Header("x-access-token") token: String,
+        @Path("id") idPaciente: Int
+    ): Call<JsonObject>
+
+    @Headers("Content-Type: application/json")
+    @POST("pacientes/{id}/anotacoes")
+    fun criarAnotacaoDoPaciente(
+        @Header("x-access-token") token: String,
+        @Path("id") idPaciente: Int,
+        @Body dados: JsonObject
+    ): Call<JsonObject>
 }

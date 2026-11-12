@@ -5,6 +5,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody
 import retrofit2.Call
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Headers
@@ -81,5 +82,19 @@ interface PacienteService {
         @Part("apelido") apelido: RequestBody,
         @Part("celular") celular: RequestBody,
         @Part fotoAvatar: MultipartBody.Part? = null
+    ): Call<JsonObject>
+
+    // Remove o vínculo do paciente logado com o profissional (o back apaga a linha do vínculo)
+    @DELETE("pacientes/me/profissionais/{id}")
+    fun desvincularProfissional(
+        @Header("x-access-token") token: String,
+        @Path("id") idProfissional: String
+    ): Call<JsonObject>
+
+    // Busca pacientes por nome ou e-mail (a rota do back usa ?busca=, não ?q=)
+    @GET("pacientes/busca")
+    fun buscarPacientesPorTermo(
+        @Header("x-access-token") token: String?,
+        @Query("busca") busca: String
     ): Call<JsonObject>
 }
