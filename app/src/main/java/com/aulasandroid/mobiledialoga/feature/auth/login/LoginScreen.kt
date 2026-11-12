@@ -20,6 +20,7 @@ import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +44,7 @@ fun LoginScreen(
 ) {
     val estado by viewModel.uiState.observeAsState(LoginUiState())
     val authState = useAuth()
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -80,7 +82,9 @@ fun LoginScreen(
                 onSenhaChange = viewModel::onSenhaChange,
                 onEsqueciSenha = onEsqueciSenha,
                 onEntrar = { viewModel.entrar(authState, onLoginSuccess, onProfissionalEmAnalise) },
-                onEntrarComGoogle = { viewModel.entrarComGoogle() },
+                onEntrarComGoogle = {
+                    viewModel.entrarComGoogle(context, authState, onLoginSuccess, onProfissionalEmAnalise)
+                },
                 modifier = Modifier.fillMaxWidth()
             )
 

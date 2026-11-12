@@ -48,8 +48,16 @@ class AuthState(private val context: Context) {
             addProperty("senha", senha)
         }
 
+        return autenticar { RetrofitFactory().getAuthService().login(jsonBody).execute() }
+    }
+
+    suspend fun loginGoogle(idGoogle: String): Auth =
+        autenticar { RetrofitFactory().getAuthService().loginGoogle(idGoogle, JsonObject()).execute() }
+
+    // trata a resposta (erros, token, perfil) igual para login com senha e com Google
+    private suspend fun autenticar(chamada: () -> retrofit2.Response<JsonObject>): Auth {
         val data = withContext(Dispatchers.IO) {
-            val response = RetrofitFactory().getAuthService().login(jsonBody).execute()
+            val response = chamada()
             if (response.isSuccessful) {
                 response.body() ?: throw AuthException("Erro na resposta do servidor", null)
             } else {

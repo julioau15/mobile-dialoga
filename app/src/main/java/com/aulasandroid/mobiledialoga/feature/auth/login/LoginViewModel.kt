@@ -1,5 +1,9 @@
 package com.aulasandroid.mobiledialoga.feature.auth.login
 
+import android.content.Context
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -69,7 +73,50 @@ class LoginViewModel : ViewModel() {
         }
     }
 
-    fun entrarComGoogle() {
-        // TODO: integrar Google Sign-In
+    fun entrarComGoogle(
+        context: Context,
+        authState: AuthState,
+        onLoginSuccess: (String) -> Unit,
+        onProfissionalEmAnalise: () -> Unit
+    ) {
+        if (estado.isLoading) return
+        viewModelScope.launch {
+            _uiState.value = estado.copy(isLoading = true, erroGeral = null)
+            try {
+                val idGoogle = GoogleSignIn.obterIdGoogle(context)
+                val auth = authState.loginGoogle(idGoogle)
+                _uiState.value = estado.copy(isLoading = false)
+                onLoginSuccess(auth.nivel)
+            } catch (e: GetCredentialCancellationException) {
+                // a pessoa fechou o seletor de contas: não é erro
+                _uiState.value = estado.copy(isLoading = false)
+            } catch (e: NoCredentialException) {
+                _uiState.value = estado.copy(
+                    isLoading = false,
+                    erroGeral = "Nenhuma conta Google encontrada neste aparelho. Adicione uma conta e tente novamente."
+                )
+            } catch (e: GetCredentialException) {
+                _uiState.value = estado.copy(isLoading = false, erroGeral = "Não foi possível entrar com o Google.")
+            } catch (e: AuthException) {
+                if (e.codigo == "PROFISSIONAL_EM_ANALISE" || e.codigo == "PROFISSIONAL_RECUSADO") {
+                    _uiState.value = estado.copy(isLoading = false)
+                    onProfissionalEmAnalise()
+                } else {
+                    val msg = ErrorTranslator.traduzirLogin(e.message)
+                    _uiState.value = estado.copy(
+                        isLoading = false,
+                        // mensagem padrão de senha não faz sentido aqui: a conta Google não está vinculada
+                        erroGeral = if (msg == "E-mail ou senha incorretos.")
+                            "Esta conta Google não está vinculada a nenhum usuário do Dialoga."
+                        else msg
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = estado.copy(
+                    isLoading = false,
+                    erroGeral = ErrorTranslator.traduzirLogin(e.message)
+                )
+            }
+        }
     }
 }

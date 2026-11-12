@@ -6,12 +6,18 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Headers
 import retrofit2.http.POST
+import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface AuthService {
     @Headers("Content-Type: application/json")
     @POST("auth/login")
     fun login(@Body body: JsonObject): Call<JsonObject>
+
+    // login pela conta Google: o back procura o usuário pelo id_google (sub da conta)
+    @Headers("Content-Type: application/json")
+    @POST("auth/login/google/{id_google}")
+    fun loginGoogle(@Path("id_google") idGoogle: String, @Body body: JsonObject): Call<JsonObject>
 
     @GET("auth/verificar-cadastro")
     fun verificarCadastro(
