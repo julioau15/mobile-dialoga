@@ -254,7 +254,7 @@ fun DialogaLayout(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { /* Notificações */ }) {
+                            IconButton(onClick = { onSelecionarItem("notificacoes") }) {
                                 Icon(
                                     imageVector = Icons.Default.Notifications,
                                     contentDescription = "Notificações",

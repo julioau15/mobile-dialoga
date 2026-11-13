@@ -284,7 +284,15 @@ class TarefasProfissionalViewModel : ViewModel() {
                     val obj = elem.asJsonObject
                     val id = parseInt(obj, "id_paciente", "id")
                     val nome = parseString(obj, "nome_completo", "nome") ?: "Paciente $id"
-                    if (id > 0) lista.add(PacienteOpcaoDto(id, nome))
+                    val statusVinculo = parseInt(obj, "status_vinculo", "status")
+                    val statusAtividade = (parseString(obj, "status_atividade") ?: "").lowercase()
+
+                    val ativo = statusAtividade.isEmpty() || statusAtividade.startsWith("ativ")
+                    val vinculoAceito = statusVinculo == 1
+
+                    if (id > 0 && vinculoAceito && ativo) {
+                        lista.add(PacienteOpcaoDto(id, nome))
+                    }
                 }
             }
         } catch (_: Exception) { }

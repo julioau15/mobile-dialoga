@@ -61,13 +61,17 @@ fun NotificacaoItem.titulo(perfil: PerfilNotificacao): String = when (idCategori
     else -> "Aviso do Dialoga"
 }
 
-/** referencia_evento vem como "consulta:1", "tarefa:3", "vinculo:5", "dose:1". */
-fun NotificacaoItem.destino(): DestinoNotificacao? = when (referencia?.substringBefore(":")) {
-    "consulta" -> DestinoNotificacao.AGENDA
-    "tarefa" -> DestinoNotificacao.TAREFAS
-    "dose", "tratamento" -> DestinoNotificacao.TRATAMENTO
-    "vinculo" -> DestinoNotificacao.PESSOAS
-    else -> null
+/** referencia_evento vem como "consulta:1", "tarefa:3", "vinculo:5", "dose:1" ou "nova_tarefa", "vinculo_aceito", etc. */
+fun NotificacaoItem.destino(): DestinoNotificacao? {
+    val ref = (referencia ?: "").lowercase().trim()
+    val prefixo = ref.substringBefore(":")
+    return when {
+        prefixo in listOf("consulta", "lembrete_consulta", "nova_consulta") || ref.contains("consulta") || idCategoria in listOf(1, 2) -> DestinoNotificacao.AGENDA
+        prefixo in listOf("tarefa", "nova_tarefa", "tarefa_respondida", "tarefa_atrasada") || ref.contains("tarefa") || idCategoria == 3 -> DestinoNotificacao.TAREFAS
+        prefixo in listOf("dose", "tratamento", "hora_da_dose") || ref.contains("dose") || ref.contains("tratamento") || idCategoria == 5 -> DestinoNotificacao.TRATAMENTO
+        prefixo in listOf("vinculo", "solicitacao_vinculo", "vinculo_aceito", "novo_vinculo") || ref.contains("vinculo") || idCategoria == 4 -> DestinoNotificacao.PESSOAS
+        else -> null
+    }
 }
 
 /** "2026-09-02T12:15:00.000Z" ou "2026-09-02 09:15:00" -> "02/09/2026 às 09:15". */

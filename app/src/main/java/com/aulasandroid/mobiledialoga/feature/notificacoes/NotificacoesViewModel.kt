@@ -81,10 +81,10 @@ class NotificacoesViewModel : ViewModel() {
         _uiState.value = estado.copy(mostrandoHistorico = historico)
     }
 
-    fun marcarComoLida(item: NotificacaoItem) {
+    fun marcarComoLida(token: String?, item: NotificacaoItem) {
         if (item.lida) return
         definirLida(item.id, true)
-        service.marcarLida(item.id).enqueue(object : Callback<JsonObject> {
+        service.marcarLida(item.id, token).enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
                 if (!response.isSuccessful) definirLida(item.id, false)
             }

@@ -51,8 +51,13 @@ class AuthState(private val context: Context) {
         return autenticar { RetrofitFactory().getAuthService().login(jsonBody).execute() }
     }
 
-    suspend fun loginGoogle(idGoogle: String): Auth =
-        autenticar { RetrofitFactory().getAuthService().loginGoogle(idGoogle, JsonObject()).execute() }
+    suspend fun loginGoogle(idGoogle: String, email: String? = null): Auth =
+        autenticar {
+            val body = JsonObject().apply {
+                if (!email.isNullOrBlank()) addProperty("email", email)
+            }
+            RetrofitFactory().getAuthService().loginGoogle(idGoogle, body).execute()
+        }
 
     // trata a resposta (erros, token, perfil) igual para login com senha e com Google
     private suspend fun autenticar(chamada: () -> retrofit2.Response<JsonObject>): Auth {
@@ -116,6 +121,11 @@ class AuthState(private val context: Context) {
         val tokenAtual = auth?.token ?: return userProfile
         val nivelAtual = auth?.nivel ?: "2"
 
+        // Verifica novas notificações em segundo plano ao carregar o perfil
+        try {
+            verificarNovasNotificacoes()
+        } catch (_: Exception) { }
+
         return withContext(Dispatchers.IO) {
             try {
                 val response = if (nivelAtual == "1" || nivelAtual == "1.0" || nivelAtual == "profissional") {
@@ -142,6 +152,45 @@ class AuthState(private val context: Context) {
             } catch (e: Exception) {
                 userProfile
             }
+        }
+    }
+
+    suspend fun verificarNovasNotificacoes() {
+        val tokenAtual = auth?.token ?: return
+        withContext(Dispatchers.IO) {
+            try {
+                val resp = RetrofitFactory().getNotificacaoService().listarNotificacoes(tokenAtual).execute()
+                if (resp.isSuccessful) {
+                    val json = resp.body()
+                    val array = findArray(json, "notificacao", "notificacoes", "response", "dados")
+                    val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    val idsVistos = prefs.getStringSet("ids_notificacoes_vistas", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+
+                    for (elem in array) {
+                        try {
+                            if (!elem.isJsonObject) continue
+                            val obj = elem.asJsonObject
+                            val id = obj.get("id")?.asInt ?: continue
+                            val lida = obj.get("lida")?.let { if (it.isJsonPrimitive) it.asInt == 1 || it.asBoolean else false } ?: false
+                            val titulo = obj.get("titulo_mensagem")?.asString ?: "Aviso do Dialoga"
+
+                            if (!lida && !idsVistos.contains(id.toString())) {
+                                val mostrou = withContext(Dispatchers.Main) {
+                                    com.aulasandroid.mobiledialoga.core.notification.NotificationHelper.mostrarNotificacao(
+                                        context,
+                                        "Dialoga",
+                                        titulo,
+                                        id
+                                    )
+                                }
+                                if (mostrou) idsVistos.add(id.toString())
+                            }
+                        } catch (_: Exception) { }
+                    }
+
+                    prefs.edit().putStringSet("ids_notificacoes_vistas", idsVistos).apply()
+                }
+            } catch (_: Exception) { }
         }
     }
 
@@ -236,7 +285,7 @@ class AuthState(private val context: Context) {
     suspend fun buscarPacientes(query: String): List<PessoaSugestao> = withContext(Dispatchers.IO) {
         try {
             val token = auth?.token
-            val response = RetrofitFactory().getPacienteService().buscarPacientes(token, query).execute()
+            val response = RetrofitFactory().getPacienteService().buscarPacientesPorTermo(token, query).execute()
             if (response.isSuccessful) {
                 val json = response.body()
                 val pacientes = findArray(json, "pacientes", "response", "dados", "data")

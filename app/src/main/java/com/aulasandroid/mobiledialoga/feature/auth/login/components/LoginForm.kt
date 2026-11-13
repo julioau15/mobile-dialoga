@@ -74,6 +74,7 @@ fun LoginForm(
         DialogaButton(
             texto = "Entrar",
             onClick = onEntrar,
+            enabled = !estado.isLoading && !estado.isGoogleLoading,
             isLoading = estado.isLoading,
             modifier = Modifier.fillMaxWidth()
         )
@@ -96,6 +97,8 @@ fun LoginForm(
         DialogaOutlinedButton(
             texto = "Continuar com Google",
             onClick = onEntrarComGoogle,
+            enabled = !estado.isLoading && !estado.isGoogleLoading,
+            isLoading = estado.isGoogleLoading,
             corConteudo = CorPrimaria,
             corBorda = CorPrimaria,
             icone = R.drawable.ic_google,

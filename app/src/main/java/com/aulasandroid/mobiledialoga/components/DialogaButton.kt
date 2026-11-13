@@ -72,19 +72,35 @@ fun DialogaOutlinedButton(
     modifier: Modifier = Modifier,
     corConteudo: Color = CorSecundaria,
     corBorda: Color = CorBorda,
-    @DrawableRes icone: Int? = null
+    @DrawableRes icone: Int? = null,
+    enabled: Boolean = true,
+    isLoading: Boolean = false
 ) {
     OutlinedButton(
         onClick = onClick,
+        enabled = enabled && !isLoading,
         shape = FormatoBotao,
         border = BorderStroke(1.dp, corBorda),
-        colors = ButtonDefaults.outlinedButtonColors(containerColor = CorBranco, contentColor = corConteudo),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = CorBranco,
+            contentColor = corConteudo,
+            disabledContainerColor = Color(0xFFF5F5F5),
+            disabledContentColor = corConteudo.copy(alpha = 0.5f)
+        ),
         modifier = modifier.height(46.dp)
     ) {
-        if (icone != null) {
-            Image(painter = painterResource(icone), contentDescription = null, modifier = Modifier.size(22.dp))
-            Spacer(modifier = Modifier.width(12.dp))
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = corConteudo,
+                strokeWidth = 2.dp
+            )
+        } else {
+            if (icone != null) {
+                Image(painter = painterResource(icone), contentDescription = null, modifier = Modifier.size(22.dp))
+                Spacer(modifier = Modifier.width(12.dp))
+            }
+            Text(text = texto, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
-        Text(text = texto, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 }

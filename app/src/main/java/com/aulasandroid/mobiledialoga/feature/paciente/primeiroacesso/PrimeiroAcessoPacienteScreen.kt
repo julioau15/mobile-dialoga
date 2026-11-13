@@ -214,8 +214,13 @@ fun PrimeiroAcessoPacienteScreen(
                         resultados = resultados,
                         selecionado = profissionalSelecionado,
                         onSelecionar = { p ->
-                            profissionalSelecionado = p
-                            buscaText = p.nome
+                            if (profissionalSelecionado == p) {
+                                profissionalSelecionado = null
+                                buscaText = ""
+                            } else {
+                                profissionalSelecionado = p
+                                buscaText = p.nome
+                            }
                         },
                         carregando = buscando,
                         mensagemVazia = "Nenhum profissional encontrado"
@@ -290,6 +295,9 @@ fun PrimeiroAcessoPacienteScreen(
             onEntendi = {
                 mostrarDialogo = false
                 etapa = 3
+            },
+            onCancelar = {
+                mostrarDialogo = false
             }
         )
     }

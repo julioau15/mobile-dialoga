@@ -8,6 +8,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.POST
+import retrofit2.http.PUT
 import retrofit2.http.Path
 
 // Rotas usadas pela Agenda do paciente
@@ -42,5 +43,17 @@ interface AgendaService {
     fun cancelarConsulta(
         @Header("x-access-token") token: String,
         @Path("id") id: Int
+    ): Call<JsonObject>
+
+    @PUT("vinculos/{id}/aceitar")
+    fun aceitarVinculo(
+        @Header("x-access-token") token: String,
+        @Path("id") idVinculo: Int
+    ): Call<JsonObject>
+
+    @PUT("vinculos/{id}/recusar")
+    fun recusarVinculo(
+        @Header("x-access-token") token: String,
+        @Path("id") idVinculo: Int
     ): Call<JsonObject>
 }

@@ -113,8 +113,13 @@ fun PrimeiroAcessoProfissionalScreen(
                 resultados = resultados,
                 selecionado = selecionado,
                 onSelecionar = { p ->
-                    selecionado = p
-                    busca = p.nome
+                    if (selecionado == p) {
+                        selecionado = null
+                        busca = ""
+                    } else {
+                        selecionado = p
+                        busca = p.nome
+                    }
                 },
                 carregando = buscando,
                 mensagemVazia = "Nenhum paciente encontrado"
@@ -167,6 +172,9 @@ fun PrimeiroAcessoProfissionalScreen(
                 mostrarDialogo = false
                 escolhido?.let(onVincularPaciente)
                 onFinalizar()
+            },
+            onCancelar = {
+                mostrarDialogo = false
             }
         )
     }

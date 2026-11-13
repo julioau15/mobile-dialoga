@@ -28,6 +28,7 @@ data class CadastroUiState(
     val especialidadesList: List<EspecialidadeDto> = emptyList(),
     val senha: String = "",
     val confirmacao: String = "",
+    val idGoogle: String? = null,
     val erroNome: String? = null,
     val erroEmail: String? = null,
     val erroCelular: String? = null,

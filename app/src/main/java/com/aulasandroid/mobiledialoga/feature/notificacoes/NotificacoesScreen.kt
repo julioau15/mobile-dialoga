@@ -50,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -86,8 +87,23 @@ fun NotificacoesScreen(
     val authState = useAuth()
     val token = authState.auth?.token
     val estado by viewModel.uiState.observeAsState(NotificacoesUiState())
+    val context = LocalContext.current
+    val idsNotificados = remember { mutableSetOf<Int>() }
 
     LaunchedEffect(token) { viewModel.carregar(token) }
+
+    LaunchedEffect(estado.notificacoes) {
+        estado.notificacoes.filter { !it.lida }.forEach { item ->
+            if (idsNotificados.add(item.id)) {
+                com.aulasandroid.mobiledialoga.core.notification.NotificationHelper.mostrarNotificacao(
+                    context,
+                    item.titulo(perfil),
+                    item.mensagem,
+                    item.id
+                )
+            }
+        }
+    }
 
     // o aviso verde some sozinho depois de 3 segundos
     LaunchedEffect(estado.toast) {
@@ -116,9 +132,9 @@ fun NotificacoesScreen(
                 onAba = { viewModel.selecionarAba(it) },
                 onMarcarTodas = { viewModel.marcarTodasComoLidas(token) },
                 onAbrirConfig = { viewModel.abrirConfig(perfil, token) },
-                onAbrirItem = { viewModel.marcarComoLida(it) },
+                onAbrirItem = { viewModel.marcarComoLida(token, it) },
                 onVer = { item, destino ->
-                    viewModel.marcarComoLida(item)
+                    viewModel.marcarComoLida(token, item)
                     onVer(destino)
                 },
                 onTentarNovamente = { viewModel.carregar(token) }
@@ -349,6 +365,13 @@ private fun CartaoNotificacao(
     val destino = item.destino()
     val naoLida = !item.lida
 
+    val acaoClique = {
+        onClick()
+        if (destino != null) {
+            onVer(destino)
+        }
+    }
+
     Row(
         verticalAlignment = Alignment.Top,
         modifier = Modifier
@@ -357,7 +380,7 @@ private fun CartaoNotificacao(
             .clip(forma)
             .background(CorBranco)
             .border(if (naoLida) 1.5.dp else 1.dp, if (naoLida) CorBordaNaoLida else CorBordaCard, forma)
-            .clickable(onClick = onClick)
+            .clickable(onClick = acaoClique)
             .padding(14.dp)
     ) {
         Box(
@@ -410,7 +433,7 @@ private fun CartaoNotificacao(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .clickable { onVer(destino) }
+                            .clickable(onClick = acaoClique)
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
                 }

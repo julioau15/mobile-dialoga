@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -25,6 +26,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
@@ -145,14 +147,26 @@ fun BuscaProfissionaisScreen(
                         CartaoVazio("Você ainda não tem profissionais. Toque em \"Novo profissional\" para começar.")
                     } else {
                         atuais.forEach { p ->
-                            CartaoProfissional(p, onRemover = { profissionalParaRemover = p })
+                            CartaoProfissional(
+                                p,
+                                onRemover = { profissionalParaRemover = p },
+                                onAceitar = { token?.let { viewModel.aceitarVinculo(it, p.idVinculo) {} } },
+                                onRecusar = { token?.let { viewModel.recusarVinculo(it, p.idVinculo) {} } }
+                            )
                         }
                     }
 
                     if (historico.isNotEmpty()) {
                         EspacoV(4.dp)
                         RotuloSecao("Histórico")
-                        historico.forEach { p -> CartaoProfissional(p, onRemover = null) }
+                        historico.forEach { p ->
+                            CartaoProfissional(
+                                p,
+                                onRemover = null,
+                                onAceitar = { token?.let { viewModel.aceitarVinculo(it, p.idVinculo) {} } },
+                                onRecusar = { token?.let { viewModel.recusarVinculo(it, p.idVinculo) {} } }
+                            )
+                        }
                     }
                 }
             }
@@ -231,7 +245,12 @@ private fun CartaoVazio(texto: String) {
 }
 
 @Composable
-private fun CartaoProfissional(p: ProfissionalVinculadoUi, onRemover: (() -> Unit)?) {
+private fun CartaoProfissional(
+    p: ProfissionalVinculadoUi,
+    onRemover: (() -> Unit)?,
+    onAceitar: (() -> Unit)? = null,
+    onRecusar: (() -> Unit)? = null
+) {
     Card(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = CorBranco),
@@ -254,7 +273,11 @@ private fun CartaoProfissional(p: ProfissionalVinculadoUi, onRemover: (() -> Uni
                 EspacoV(4.dp)
                 when (p.statusVinculo) {
                     1 -> ChipStatus("Ativo", CorChipVerdeFundo, CorChipVerdeTexto)
-                    0 -> ChipStatus("Aguardando aceite", CorChipAmareloFundo, CorChipAmareloTexto)
+                    0 -> ChipStatus(
+                        if (p.podeAprovar) "Solicitação recebida" else "Aguardando aceite do profissional",
+                        CorChipAmareloFundo,
+                        CorChipAmareloTexto
+                    )
                     else -> ChipStatus("Recusado", CorChipCinzaFundo, CorSecundaria)
                 }
                 if (!p.especialidades.isNullOrBlank()) {
@@ -276,6 +299,28 @@ private fun CartaoProfissional(p: ProfissionalVinculadoUi, onRemover: (() -> Uni
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
                         )
+                    }
+                }
+                if (p.podeAprovar && onAceitar != null && onRecusar != null) {
+                    EspacoV(12.dp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = onAceitar,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D), contentColor = Color.White),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f).height(36.dp)
+                        ) {
+                            Text("Aceitar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(
+                            onClick = onRecusar,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = CorErro),
+                            border = BorderStroke(1.dp, CorErro),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f).height(36.dp)
+                        ) {
+                            Text("Recusar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

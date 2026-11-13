@@ -40,6 +40,7 @@ fun LoginScreen(
     onEsqueciSenha: () -> Unit,
     onLoginSuccess: (String) -> Unit,
     onProfissionalEmAnalise: () -> Unit,
+    onCadastrarComGoogle: (String, String, String?) -> Unit,
     viewModel: LoginViewModel = viewModel()
 ) {
     val estado by viewModel.uiState.observeAsState(LoginUiState())
@@ -83,7 +84,7 @@ fun LoginScreen(
                 onEsqueciSenha = onEsqueciSenha,
                 onEntrar = { viewModel.entrar(authState, onLoginSuccess, onProfissionalEmAnalise) },
                 onEntrarComGoogle = {
-                    viewModel.entrarComGoogle(context, authState, onLoginSuccess, onProfissionalEmAnalise)
+                    viewModel.entrarComGoogle(context, authState, onLoginSuccess, onProfissionalEmAnalise, onCadastrarComGoogle)
                 },
                 modifier = Modifier.fillMaxWidth()
             )
@@ -113,6 +114,6 @@ fun LoginScreen(
 @Composable
 fun LoginScreenPreview() {
     MobileDialogaTheme {
-        LoginScreen(onCadastrar = {}, onEsqueciSenha = {}, onLoginSuccess = {}, onProfissionalEmAnalise = {})
+        LoginScreen(onCadastrar = {}, onEsqueciSenha = {}, onLoginSuccess = {}, onProfissionalEmAnalise = {}, onCadastrarComGoogle = { _, _, _ -> })
     }
 }

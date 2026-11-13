@@ -23,14 +23,17 @@ import retrofit2.awaitResponse
 /** Status do vínculo no back: 0 = aguardando aceite, 1 = ativo, 2 = recusado. */
 data class PacienteVinculadoUi(
     val id: Int,
+    val idVinculo: Int,
     val nome: String,
     val ativo: Boolean, // status_atividade do paciente
     val statusVinculo: Int,
+    val origemCadastro: Int, // 1 = profissional convidou, 2 = paciente convidou
     val desdeIso: String?,
     val email: String?, // o back só devolve contato depois que o vínculo é aceito
     val celular: String?
 ) {
     val aguardandoAceite: Boolean get() = statusVinculo == 0
+    val podeAprovar: Boolean get() = aguardandoAceite && origemCadastro == 2
 }
 
 data class ConsultaDoPacienteUi(val idPaciente: Int, val dataIso: String)
@@ -106,11 +109,11 @@ class PacientesProfissionalViewModel : ViewModel() {
         state = state.copy(isLoading = true, erro = null)
 
         viewModelScope.launch {
-            val service = RetrofitFactory().getProfissionalService()
+            val profissionalService = RetrofitFactory().getProfissionalService()
 
             val (respPacientes, respConsultas) = coroutineScope {
-                val p = async { chamar { service.listarPacientesVinculados(token) } }
-                val c = async { chamar { service.getMinhasConsultas(token) } }
+                val p = async { chamar { profissionalService.listarPacientesVinculados(token) } }
+                val c = async { chamar { profissionalService.getMinhasConsultas(token) } }
                 p.await() to c.await()
             }
 
@@ -130,9 +133,11 @@ class PacientesProfissionalViewModel : ViewModel() {
                     val atividade = (obj.txt("status_atividade") ?: "").lowercase()
                     PacienteVinculadoUi(
                         id = id,
+                        idVinculo = obj.num("id_vinculo"),
                         nome = obj.txt("nome_completo") ?: obj.txt("apelido") ?: "Paciente $id",
                         ativo = atividade.isEmpty() || atividade.startsWith("ativ"),
                         statusVinculo = obj.num("status_vinculo"),
+                        origemCadastro = obj.num("origem_cadastro"),
                         desdeIso = obj.txt("desde").paraIso(),
                         email = obj.txt("email"),
                         celular = obj.txt("celular")
@@ -168,7 +173,7 @@ class PacientesProfissionalViewModel : ViewModel() {
     // Novo paciente (busca na plataforma + vínculo)
     // ---------------------------------------------------------------------
 
-    fun buscarParaAdicionar(token: String, termo: String) {
+    fun buscar(token: String, termo: String) {
         val t = termo.trim()
         if (t.length < 2) {
             limparBusca()
@@ -218,6 +223,32 @@ class PacientesProfissionalViewModel : ViewModel() {
                     toast = mensagemErroHttp(resp.codigo, !resp.conectou, "adicionar o paciente"),
                     toastSucesso = false
                 )
+            }
+        }
+    }
+
+    fun aceitarVinculo(token: String, idVinculo: Int, aoConcluir: () -> Unit) {
+        viewModelScope.launch {
+            val resp = chamar { RetrofitFactory().getAgendaService().aceitarVinculo(token, idVinculo) }
+            if (resp.ok) {
+                state = state.copy(toast = "Vínculo aceito com sucesso.", toastSucesso = true)
+                aoConcluir()
+                carregar(token)
+            } else {
+                state = state.copy(toast = mensagemErroHttp(resp.codigo, !resp.conectou, "aceitar o vínculo"), toastSucesso = false)
+            }
+        }
+    }
+
+    fun recusarVinculo(token: String, idVinculo: Int, aoConcluir: () -> Unit) {
+        viewModelScope.launch {
+            val resp = chamar { RetrofitFactory().getAgendaService().recusarVinculo(token, idVinculo) }
+            if (resp.ok) {
+                state = state.copy(toast = "Vínculo recusado.", toastSucesso = true)
+                aoConcluir()
+                carregar(token)
+            } else {
+                state = state.copy(toast = mensagemErroHttp(resp.codigo, !resp.conectou, "recusar o vínculo"), toastSucesso = false)
             }
         }
     }
@@ -282,11 +313,7 @@ class PacientesProfissionalViewModel : ViewModel() {
                 else service.atualizarAnotacao(idNota, corpo)
             }
             if (resp.ok) {
-                state = state.copy(
-                    salvando = false,
-                    toast = if (idNota == null) "Nota adicionada!" else "Nota atualizada!",
-                    toastSucesso = true
-                )
+                state = state.copy(salvando = false, toast = "Anotação salva com sucesso.", toastSucesso = true)
                 aoConcluir()
                 carregarAnotacoes(token, idPaciente)
             } else {
@@ -306,23 +333,18 @@ class PacientesProfissionalViewModel : ViewModel() {
         viewModelScope.launch {
             val resp = chamar { RetrofitFactory().getAnotacaoService().excluirAnotacao(idNota) }
             if (resp.ok) {
-                // No protótipo o aviso de remoção é vermelho
-                state = state.copy(salvando = false, toast = "Nota removida.", toastSucesso = false)
+                state = state.copy(salvando = false, toast = "Anotação excluída.", toastSucesso = true)
                 aoConcluir()
                 carregarAnotacoes(token, idPaciente)
             } else {
                 state = state.copy(
                     salvando = false,
-                    toast = mensagemErroHttp(resp.codigo, !resp.conectou, "remover a anotação"),
+                    toast = mensagemErroHttp(resp.codigo, !resp.conectou, "excluir a anotação"),
                     toastSucesso = false
                 )
             }
         }
     }
-
-    // ---------------------------------------------------------------------
-    // Solicitar acesso aos indicadores
-    // ---------------------------------------------------------------------
 
     fun solicitarAcesso(token: String, idPaciente: Int, aoConcluir: () -> Unit) {
         if (state.salvando) return
@@ -347,8 +369,6 @@ class PacientesProfissionalViewModel : ViewModel() {
             }
         }
     }
-
-    // ---------------------------------------------------------------------
 
     private suspend fun chamar(bloco: () -> Call<JsonObject>): Resp = try {
         val r = bloco().awaitResponse()

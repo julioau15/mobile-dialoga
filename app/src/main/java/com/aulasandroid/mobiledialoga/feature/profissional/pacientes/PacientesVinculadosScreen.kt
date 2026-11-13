@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +29,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
@@ -37,7 +39,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -46,18 +47,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aulasandroid.mobiledialoga.data.useAuth
 import com.aulasandroid.mobiledialoga.feature.perfil.components.AvisoPerfil
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.TarefasProfissionalUiState
-import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.TarefasProfissionalViewModel
+import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.model.formatarDataBr
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.AvatarIniciais
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.BotaoModalPrincipal
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.BotaoModalSecundario
@@ -72,7 +70,9 @@ import com.aulasandroid.mobiledialoga.feature.vinculos.components.CorLinhaSuave
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.EspacoH
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.EspacoV
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.ModalDialoga
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.RotuloSecao
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.mesAnoCurto
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.mesAnoExtenso
 import com.aulasandroid.mobiledialoga.ui.theme.CorBorda
 import com.aulasandroid.mobiledialoga.ui.theme.CorBordaCard
 import com.aulasandroid.mobiledialoga.ui.theme.CorBranco
@@ -82,45 +82,32 @@ import com.aulasandroid.mobiledialoga.ui.theme.CorSecundaria
 import com.aulasandroid.mobiledialoga.ui.theme.CorTexto
 import kotlinx.coroutines.delay
 
-private sealed interface Dialogo {
-    object Adicionar : Dialogo
-    class NotaRapida(val paciente: PacienteVinculadoUi) : Dialogo
-    object NovaNota : Dialogo
-    class EditarNota(val nota: AnotacaoUi) : Dialogo
-    class ExcluirNota(val nota: AnotacaoUi) : Dialogo
-    object SolicitarAcesso : Dialogo
-}
-
 @Composable
 fun PacientesVinculadosScreen(
     modifier: Modifier = Modifier,
-    viewModel: PacientesProfissionalViewModel = viewModel(),
-    // Mesmo ViewModel da tela de Tarefas: o histórico de tarefas do paciente vem dos dados já carregados lá
-    tarefasViewModel: TarefasProfissionalViewModel = viewModel()
+    viewModel: PacientesProfissionalViewModel = viewModel()
 ) {
     val authState = useAuth()
     val token = authState.auth?.token
     val estado = viewModel.state
-    val tarefas by tarefasViewModel.uiState.observeAsState(TarefasProfissionalUiState())
 
     var abertoId by rememberSaveable { mutableStateOf<Int?>(null) }
     var aba by rememberSaveable { mutableStateOf(0) }
     var dialogo by remember { mutableStateOf<Dialogo?>(null) }
 
     LaunchedEffect(token) {
-        if (!token.isNullOrBlank()) {
-            viewModel.carregar(token)
-            tarefasViewModel.carregarDados(token)
-        }
+        if (!token.isNullOrBlank()) viewModel.carregar(token)
     }
 
-    // O aviso some sozinho depois de 3 segundos
+    // O aviso some sozinho após 3 segundos
     LaunchedEffect(estado.toast) {
         if (estado.toast != null) {
             delay(3000)
             viewModel.limparToast()
         }
     }
+
+    val tarefas = TarefasProfissionalUiState()
 
     BackHandler(enabled = abertoId != null) {
         abertoId = null
@@ -140,7 +127,9 @@ fun PacientesVinculadosScreen(
                     token?.let { viewModel.carregarAnotacoes(it, p.id) }
                 },
                 onAnotar = { p -> dialogo = Dialogo.NotaRapida(p) },
-                onTentarNovamente = { token?.let { viewModel.carregar(it) } }
+                onTentarNovamente = { token?.let { viewModel.carregar(it) } },
+                token = token,
+                viewModel = viewModel
             )
         } else {
             PacienteDetalhe(
@@ -155,7 +144,7 @@ fun PacientesVinculadosScreen(
                 },
                 onNovaNota = { dialogo = Dialogo.NovaNota },
                 onEditarNota = { dialogo = Dialogo.EditarNota(it) },
-                onExcluirNota = { dialogo = Dialogo.ExcluirNota(it) },
+                onExcluirNota = { nota -> dialogo = Dialogo.ExcluirNota(nota.id) },
                 onRecarregarNotas = { token?.let { viewModel.carregarAnotacoes(it, aberto.id) } },
                 onSolicitarAcesso = { dialogo = Dialogo.SolicitarAcesso }
             )
@@ -168,100 +157,110 @@ fun PacientesVinculadosScreen(
         )
     }
 
-    // ---- Modais ----
-    val fechar = { dialogo = null }
-
     when (val d = dialogo) {
+        null -> Unit
         Dialogo.Adicionar -> ModalNovoPaciente(
             estado = estado,
-            onBuscar = { termo -> token?.let { viewModel.buscarParaAdicionar(it, termo) } },
+            onBuscar = { termo -> token?.let { viewModel.buscar(it, termo) } },
             onFechar = {
                 viewModel.limparBusca()
-                fechar()
+                dialogo = null
             },
-            onAdicionar = { id -> token?.let { viewModel.adicionarPaciente(it, id) { fechar() } } }
-        )
-
-        is Dialogo.NotaRapida -> ModalAnotacao(
-            titulo = "Anotar — ${d.paciente.nome}",
-            salvando = estado.salvando,
-            onFechar = fechar,
-            onSalvar = { t, c -> token?.let { viewModel.salvarAnotacao(it, d.paciente.id, null, t, c) { fechar() } } }
-        )
-
-        Dialogo.NovaNota -> aberto?.let { p ->
-            ModalAnotacao(
-                titulo = "Nova anotação",
-                salvando = estado.salvando,
-                onFechar = fechar,
-                onSalvar = { t, c -> token?.let { viewModel.salvarAnotacao(it, p.id, null, t, c) { fechar() } } }
-            )
-        }
-
-        is Dialogo.EditarNota -> aberto?.let { p ->
-            ModalAnotacao(
-                titulo = "Editar anotação",
-                tituloInicial = d.nota.titulo,
-                conteudoInicial = d.nota.conteudo,
-                salvando = estado.salvando,
-                onFechar = fechar,
-                onSalvar = { t, c -> token?.let { viewModel.salvarAnotacao(it, p.id, d.nota.id, t, c) { fechar() } } }
-            )
-        }
-
-        is Dialogo.ExcluirNota -> aberto?.let { p ->
-            ModalDialoga(
-                titulo = "Excluir anotação",
-                onFechar = fechar,
-                bloqueado = estado.salvando,
-                rodape = {
-                    BotaoModalSecundario("Cancelar", onClick = fechar, habilitado = !estado.salvando)
-                    BotaoModalPrincipal(
-                        texto = "Excluir",
-                        perigo = true,
-                        habilitado = !estado.salvando,
-                        onClick = { token?.let { viewModel.excluirAnotacao(it, p.id, d.nota.id) { fechar() } } }
-                    )
-                }
-            ) {
-                Text("Esta anotação será removida permanentemente.", color = CorSecundaria, fontSize = 14.sp)
+            onAdicionar = { id ->
+                token?.let { viewModel.adicionarPaciente(it, id) { dialogo = null } }
             }
-        }
-
-        Dialogo.SolicitarAcesso -> aberto?.let { p ->
-            ModalDialoga(
-                titulo = "Solicitar acesso aos indicadores",
-                onFechar = fechar,
-                bloqueado = estado.salvando,
-                rodape = {
-                    BotaoModalSecundario("Cancelar", onClick = fechar, habilitado = !estado.salvando)
-                    BotaoModalPrincipal(
-                        texto = if (estado.salvando) "Enviando…" else "Enviar solicitação",
-                        habilitado = !estado.salvando,
-                        onClick = { token?.let { viewModel.solicitarAcesso(it, p.id) { fechar() } } }
-                    )
+        )
+        is Dialogo.NotaRapida -> ModalAnotacao(
+            titulo = "Nova anotação sobre ${d.paciente.nome}",
+            salvando = estado.salvando,
+            onSalvar = { titulo, conteudo ->
+                token?.let { viewModel.salvonarNotaRapida(it, d.paciente.id, titulo, conteudo) { dialogo = null } }
+            },
+            onFechar = { dialogo = null }
+        )
+        Dialogo.NovaNota -> ModalAnotacao(
+            titulo = "Adicionar anotação",
+            salvando = estado.salvando,
+            onSalvar = { titulo, conteudo ->
+                abertoId?.let { idPac ->
+                    token?.let { viewModel.salvarAnotacao(it, idPac, null, titulo, conteudo) { dialogo = null } }
                 }
-            ) {
-                Text(
-                    text = buildAnnotatedString {
-                        append("Será enviada uma notificação para ")
-                        withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = CorTexto)) { append(p.nome) }
-                        append(" solicitando autorização para visualizar seus indicadores de humor, sono e aderência ao tratamento.")
-                    },
-                    color = CorSecundaria,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
+            },
+            onFechar = { dialogo = null }
+        )
+        is Dialogo.EditarNota -> ModalAnotacao(
+            titulo = "Editar anotação",
+            salvando = estado.salvando,
+            onSalvar = { titulo, conteudo ->
+                abertoId?.let { idPac ->
+                    token?.let { viewModel.salvarAnotacao(it, idPac, d.nota.id, titulo, conteudo) { dialogo = null } }
+                }
+            },
+            onFechar = { dialogo = null },
+            tituloInicial = d.nota.titulo,
+            conteudoInicial = d.nota.conteudo
+        )
+        is Dialogo.ExcluirNota -> ModalDialoga(
+            titulo = "Excluir anotação",
+            onFechar = { dialogo = null },
+            bloqueado = estado.salvando,
+            rodape = {
+                BotaoModalSecundario("Cancelar", onClick = { dialogo = null }, habilitado = !estado.salvando)
+                BotaoModalPrincipal(
+                    texto = "Excluir",
+                    perigo = true,
+                    habilitado = !estado.salvando,
+                    onClick = {
+                        abertoId?.let { idPac ->
+                            token?.let { viewModel.excluirAnotacao(it, idPac, d.notaId) { dialogo = null } }
+                        }
+                    }
                 )
             }
+        ) {
+            Text("Tem certeza que deseja excluir esta anotação? Esta ação não pode ser desfeita.", color = CorSecundaria, fontSize = 14.sp)
         }
-
-        null -> Unit
+        Dialogo.SolicitarAcesso -> ModalDialoga(
+            titulo = "Solicitar acesso aos indicadores",
+            onFechar = { dialogo = null },
+            bloqueado = estado.salvando,
+            rodape = {
+                BotaoModalSecundario("Cancelar", onClick = { dialogo = null }, habilitado = !estado.salvando)
+                BotaoModalPrincipal(
+                    texto = "Enviar solicitação",
+                    habilitado = !estado.salvando,
+                    onClick = {
+                        abertoId?.let { idPac ->
+                            token?.let { viewModel.solicitarAcesso(it, idPac) { dialogo = null } }
+                        }
+                    }
+                )
+            }
+        ) {
+            Text("O paciente receberá um pedido para compartilhar humor, sono e medicamentos com você.", color = CorSecundaria, fontSize = 14.sp)
+        }
     }
 }
 
-// ---------------------------------------------------------------------------
-// Lista
-// ---------------------------------------------------------------------------
+private sealed class Dialogo {
+    object Adicionar : Dialogo()
+    class NotaRapida(val paciente: PacienteVinculadoUi) : Dialogo()
+    object NovaNota : Dialogo()
+    class EditarNota(val nota: AnotacaoUi) : Dialogo()
+    class ExcluirNota(val notaId: Int) : Dialogo()
+    object SolicitarAcesso : Dialogo()
+}
+
+// Pequeno helper para salvar nota rápida direto da lista
+private fun PacientesProfissionalViewModel.salvonarNotaRapida(
+    token: String,
+    idPaciente: Int,
+    titulo: String,
+    conteudo: String,
+    aoConcluir: () -> Unit
+) {
+    salvarAnotacao(token, idPaciente, null, titulo, conteudo, aoConcluir)
+}
 
 @Composable
 private fun ListaPacientes(
@@ -269,20 +268,12 @@ private fun ListaPacientes(
     onNovoPaciente: () -> Unit,
     onAbrir: (PacienteVinculadoUi) -> Unit,
     onAnotar: (PacienteVinculadoUi) -> Unit,
-    onTentarNovamente: () -> Unit
+    onTentarNovamente: () -> Unit,
+    token: String?,
+    viewModel: PacientesProfissionalViewModel
 ) {
+    var filtro by rememberSaveable { mutableStateOf("Todos") }
     var busca by rememberSaveable { mutableStateOf("") }
-    var filtro by rememberSaveable { mutableStateOf(0) } // 0 = Todos, 1 = Ativos, 2 = Inativos
-
-    val filtrados = estado.pacientes.filter { p ->
-        val bateBusca = busca.isBlank() || p.nome.contains(busca.trim(), ignoreCase = true)
-        val bateFiltro = when (filtro) {
-            1 -> p.ativo
-            2 -> !p.ativo
-            else -> true
-        }
-        bateBusca && bateFiltro
-    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -291,20 +282,12 @@ private fun ListaPacientes(
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        // Título + Botão
+        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
                 Text("Pacientes", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = CorTexto)
                 EspacoV(4.dp)
-                val n = estado.pacientesAtivos
-                Text(
-                    text = if (n == 1) "1 paciente ativo" else "$n pacientes ativos",
-                    fontSize = 14.sp,
-                    color = CorSecundaria
-                )
+                Text("Gerencie seus acompanhamentos", fontSize = 14.sp, color = CorSecundaria, lineHeight = 18.sp)
             }
             Button(
                 onClick = onNovoPaciente,
@@ -313,20 +296,23 @@ private fun ListaPacientes(
             ) {
                 Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 EspacoH(6.dp)
-                Text("Novo paciente", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("Adicionar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
 
-        // Busca + filtros
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            CampoBusca(
-                valor = busca,
-                onValorChange = { busca = it },
-                placeholder = "Buscar paciente…",
-                modifier = Modifier.weight(1f)
-            )
-            listOf("Todos", "Ativos", "Inativos").forEachIndexed { i, rotulo ->
-                FiltroChip(rotulo, selecionado = filtro == i) { filtro = i }
+        // Barra de busca
+        CampoBusca(
+            valor = busca,
+            onValorChange = { busca = it },
+            placeholder = "Buscar paciente por nome…",
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        // Filtros (Chips)
+        val filtros = listOf("Todos", "Ativos", "Inativos")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            filtros.forEach { f ->
+                FiltroChip(rotulo = f, selecionado = filtro == f) { filtro = f }
             }
         }
 
@@ -346,25 +332,47 @@ private fun ListaPacientes(
                 }
             }
 
-            filtrados.isEmpty() -> Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = CorBranco),
-                border = BorderStroke(1.dp, CorBordaCard),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = if (estado.pacientes.isEmpty())
-                        "Você ainda não tem pacientes. Toque em \"Novo paciente\" para começar."
-                    else "Nenhum paciente encontrado.",
-                    color = CorSecundaria,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                    modifier = Modifier.padding(20.dp)
-                )
+            estado.pacientes.isEmpty() -> {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CorBranco),
+                    border = BorderStroke(1.dp, CorBordaCard),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Você ainda não tem pacientes cadastrados. Toque em \"Adicionar\" para começar.",
+                        color = CorSecundaria,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        modifier = Modifier.padding(20.dp)
+                    )
+                }
             }
 
-            else -> filtrados.forEach { p ->
-                CartaoPaciente(p, onAbrir = { onAbrir(p) }, onAnotar = { onAnotar(p) })
+            else -> {
+                val filtrados = estado.pacientes.filter { p ->
+                    val matchFiltro = when (filtro) {
+                        "Ativos" -> p.ativo
+                        "Inativos" -> !p.ativo
+                        else -> true
+                    }
+                    val matchBusca = busca.isBlank() || p.nome.contains(busca, ignoreCase = true)
+                    matchFiltro && matchBusca
+                }
+
+                if (filtrados.isEmpty()) {
+                    Text("Nenhum paciente encontrado.", color = CorSecundaria, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
+                } else {
+                    filtrados.forEach { p ->
+                        CartaoPaciente(
+                            p,
+                            onAbrir = { onAbrir(p) },
+                            onAnotar = { onAnotar(p) },
+                            onAceitar = { token?.let { viewModel.aceitarVinculo(it, p.idVinculo) {} } },
+                            onRecusar = { token?.let { viewModel.recusarVinculo(it, p.idVinculo) {} } }
+                        )
+                    }
+                }
             }
         }
 
@@ -395,7 +403,13 @@ private fun FiltroChip(rotulo: String, selecionado: Boolean, onClick: () -> Unit
 }
 
 @Composable
-private fun CartaoPaciente(p: PacienteVinculadoUi, onAbrir: () -> Unit, onAnotar: () -> Unit) {
+private fun CartaoPaciente(
+    p: PacienteVinculadoUi,
+    onAbrir: () -> Unit,
+    onAnotar: () -> Unit,
+    onAceitar: (() -> Unit)? = null,
+    onRecusar: (() -> Unit)? = null
+) {
     Card(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = CorBranco),
@@ -403,30 +417,53 @@ private fun CartaoPaciente(p: PacienteVinculadoUi, onAbrir: () -> Unit, onAnotar
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth().clickable(onClick = onAbrir)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, top = 12.dp, bottom = 12.dp, end = 6.dp)
-        ) {
-            AvatarIniciais(p.nome, tamanho = 44.dp)
-            EspacoH(12.dp)
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = p.nome,
-                    color = CorTexto,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                p.desdeIso.mesAnoCurto()?.let {
-                    EspacoV(2.dp)
-                    Text("Desde $it", color = CorSecundaria, fontSize = 12.sp)
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
+                AvatarIniciais(p.nome, tamanho = 48.dp)
+                EspacoH(14.dp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = p.nome,
+                        color = CorTexto,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    EspacoV(4.dp)
+                    StatusPaciente(p)
+                }
+                IconButton(onClick = onAnotar) {
+                    Icon(Icons.Outlined.Description, contentDescription = "Anotar", tint = CorSecundaria, modifier = Modifier.size(20.dp))
                 }
             }
-            EspacoH(8.dp)
-            StatusPaciente(p)
-            IconButton(onClick = onAnotar) {
-                Icon(Icons.Outlined.Description, contentDescription = "Anotar", tint = CorSecundaria, modifier = Modifier.size(20.dp))
+
+            p.desdeIso.mesAnoCurto()?.let {
+                EspacoV(6.dp)
+                Text("Desde $it", color = CorSecundaria, fontSize = 12.sp)
+            }
+
+            if (p.podeAprovar && onAceitar != null && onRecusar != null) {
+                EspacoV(12.dp)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        onClick = onAceitar,
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D), contentColor = Color.White),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f).height(36.dp)
+                    ) {
+                        Text("Aceitar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(
+                        onClick = onRecusar,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = CorErro),
+                        border = BorderStroke(1.dp, CorErro),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f).height(36.dp)
+                    ) {
+                        Text("Recusar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }
@@ -435,7 +472,11 @@ private fun CartaoPaciente(p: PacienteVinculadoUi, onAbrir: () -> Unit, onAnotar
 @Composable
 internal fun StatusPaciente(p: PacienteVinculadoUi) {
     when {
-        p.aguardandoAceite -> ChipStatus("Aguardando aceite", CorChipAmareloFundo, CorChipAmareloTexto)
+        p.aguardandoAceite -> ChipStatus(
+            if (p.podeAprovar) "Solicitação recebida" else "Aguardando aceite do paciente",
+            CorChipAmareloFundo,
+            CorChipAmareloTexto
+        )
         p.ativo -> ChipStatus("Ativo", CorChipVerdeFundo, CorChipVerdeTexto)
         else -> ChipStatus("Inativo", CorChipCinzaFundo, CorSecundaria)
     }

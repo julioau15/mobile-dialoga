@@ -28,6 +28,7 @@ interface ProfissionalService {
         @Part("crp") crp: RequestBody,
         @Part("instituicao_clinica") instituicao: RequestBody?,
         @Part("id_especialidade") idEspecialidade: RequestBody,
+        @Part("id_google") idGoogle: RequestBody? = null,
         @Part fotoAvatar: MultipartBody.Part? = null
     ): Call<JsonObject>
 

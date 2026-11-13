@@ -540,7 +540,7 @@ internal fun BuscaPessoa(
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             }
         } else if (selecionado != null) {
-            LinhaPessoa(pessoa = selecionado, selecionada = true, onClick = null)
+            LinhaPessoa(pessoa = selecionado, selecionada = true, onClick = { onSelecionar(selecionado) })
         } else if (busca.trim().length >= 2) {
             if (resultados.isEmpty()) {
                 Text(
@@ -593,12 +593,15 @@ private fun LinhaPessoa(pessoa: PessoaSugestao, selecionada: Boolean, onClick: (
             Text(text = pessoa.detalhe, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = primary, maxLines = 1)
         }
         if (selecionada) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null,
-                tint = Color(0xFF2E9E5B),
-                modifier = Modifier.size(22.dp)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Desmarcar ✕",
+                    fontSize = 12.sp,
+                    color = CorErro,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(end = 4.dp)
+                )
+            }
         }
     }
 }
@@ -626,9 +629,11 @@ internal fun DialogoVinculo(
     titulo: String,
     mensagem: String,
     detalhe: AnnotatedString,
-    onEntendi: () -> Unit
+    onEntendi: () -> Unit,
+    onCancelar: (() -> Unit)? = null
 ) {
-    Dialog(onDismissRequest = onEntendi) {
+    val fecharOuCancelar = { onCancelar?.invoke() ?: onEntendi() }
+    Dialog(onDismissRequest = fecharOuCancelar) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -642,8 +647,8 @@ internal fun DialogoVinculo(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = titulo, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextoTitulo)
-                IconButton(onClick = onEntendi) {
-                    Icon(imageVector = Icons.Default.Close, contentDescription = null, tint = TextoSuave)
+                IconButton(onClick = fecharOuCancelar) {
+                    Icon(imageVector = Icons.Default.Close, contentDescription = "Fechar", tint = TextoSuave)
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -659,7 +664,11 @@ internal fun DialogoVinculo(
                 Text(text = detalhe, fontSize = 13.sp, color = TextoSuave)
             }
             Spacer(modifier = Modifier.height(20.dp))
-            BotaoPrimario(texto = "Entendi", onClick = onEntendi)
+            BotaoPrimario(texto = "Confirmar e Enviar", onClick = onEntendi)
+            if (onCancelar != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                BotaoTexto(texto = "Cancelar", onClick = onCancelar)
+            }
         }
     }
 }

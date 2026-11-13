@@ -141,7 +141,8 @@ fun TarefasPacienteScreen(
             onOpcaoMultiplaToggled = { pId, oId -> vm.onOpcaoMultiplaToggled(pId, oId) },
             onTextoChanged = { pId, txt -> vm.onTextoRespostaChanged(pId, txt) },
             onEscalaSelected = { pId, num -> vm.onEscalaRespostaSelected(pId, num) },
-            onSolicitarEnvio = { vm.solicitarConfirmacaoEnvio() }
+            onSolicitarEnvio = { vm.solicitarConfirmacaoEnvio() },
+            onMarcarConcluida = { vm.marcarComoConcluida(token, tarefaEmEdicao) }
         )
 
         if (estado.mostrarModalConfirmarEnvio) {
@@ -600,7 +601,8 @@ private fun TelaRespostaTarefaDetalhada(
     onOpcaoMultiplaToggled: (Int, Int) -> Unit,
     onTextoChanged: (Int, String) -> Unit,
     onEscalaSelected: (Int, Int) -> Unit,
-    onSolicitarEnvio: () -> Unit
+    onSolicitarEnvio: () -> Unit,
+    onMarcarConcluida: () -> Unit
 ) {
     val statusTxt = tarefa.getStatusFormatado()
     val jaConcluida = statusTxt == "Concluída"
@@ -701,6 +703,17 @@ private fun TelaRespostaTarefaDetalhada(
                     erro = estado.erroDetalhes != null
                 )
                 Spacer(modifier = Modifier.height(16.dp))
+                if (!jaConcluida) {
+                    DialogaButton(
+                        texto = "Marcar como concluída",
+                        onClick = {
+                            onMarcarConcluida()
+                            onVoltar()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
                 DialogaOutlinedButton(texto = "Voltar às tarefas", onClick = onVoltar, modifier = Modifier.fillMaxWidth())
             }
 
@@ -781,6 +794,13 @@ private fun TelaRespostaTarefaDetalhada(
                             color = CorSecundaria
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    DialogaOutlinedButton(
+                        texto = "Marcar como concluída",
+                        onClick = onMarcarConcluida,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 } else {
                     DialogaOutlinedButton(
                         texto = "Voltar às tarefas",

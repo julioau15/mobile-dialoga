@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -27,6 +28,7 @@ import com.aulasandroid.mobiledialoga.feature.paciente.primeiroacesso.PrimeiroAc
 import com.aulasandroid.mobiledialoga.feature.profissional.ProfissionalScreen
 import com.aulasandroid.mobiledialoga.feature.profissional.primeiroacesso.PrimeiroAcessoProfissionalScreen
 import com.google.gson.JsonObject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -47,6 +49,14 @@ fun AppNavigation() {
     }
 
     if (auth != null) {
+        // Enquanto o app está aberto, consulta novas notificações a cada 30s (não existe push no back)
+        LaunchedEffect(auth.token) {
+            while (true) {
+                delay(30_000)
+                try { authState.verificarNovasNotificacoes() } catch (_: Exception) { }
+            }
+        }
+
         val nivel = auth.nivel.trim().lowercase()
         val isAdmin = nivel == "0" || nivel == "0.0" || nivel == "3" || nivel == "3.0" || nivel.contains("admin")
         val isProfissional = nivel == "1" || nivel == "1.0" || nivel == "profissional"
@@ -67,7 +77,7 @@ fun AppNavigation() {
             } else {
                 PrimeiroAcessoPacienteScreen(
                     nomeCompleto = authState.userProfile?.nome,
-                    onFinalizar = { dados -> 
+                    onFinalizar = { dados ->
                         scope.launch { authState.concluirPrimeiroAcesso(dados) }
                     },
                     buscarProfissionais = { query -> authState.buscarProfissionais(query) }
@@ -95,7 +105,11 @@ fun AppNavigation() {
             onCadastrar = { rota = Rota.CADASTRO },
             onEsqueciSenha = { rota = Rota.RECUPERAR_SENHA },
             onLoginSuccess = { /* O redirecionamento é automático pelo estado do authState */ },
-            onProfissionalEmAnalise = { rota = Rota.EM_ANALISE }
+            onProfissionalEmAnalise = { rota = Rota.EM_ANALISE },
+            onCadastrarComGoogle = { idGoogle, email, nome ->
+                cadastroViewModel.preencherDadosGoogle(idGoogle, email, nome)
+                rota = Rota.CADASTRO
+            }
         )
 
         Rota.CADASTRO -> CadastroScreen(

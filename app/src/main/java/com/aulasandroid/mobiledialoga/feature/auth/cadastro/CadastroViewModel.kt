@@ -209,6 +209,17 @@ class CadastroViewModel : ViewModel() {
         _uiState.value = estado.copy(confirmacao = confirmacao, erroConfirmacao = null, erroGeral = null)
     }
 
+    fun preencherDadosGoogle(idGoogle: String, email: String, nome: String?) {
+        _uiState.value = estado.copy(
+            idGoogle = idGoogle,
+            email = email.trim().lowercase(),
+            nome = nome ?: "",
+            erroEmail = null,
+            erroNome = null,
+            erroGeral = null
+        )
+    }
+
     /**
      * Realiza o cadastro enviando Multipart RequestBody para a API (exatamente como o backend espera).
      */
@@ -222,6 +233,7 @@ class CadastroViewModel : ViewModel() {
         _uiState.value = estado.copy(isLoading = true, erroGeral = null)
 
         val mediaType = "text/plain".toMediaTypeOrNull()
+        val idGoogleBody = if (!atual.idGoogle.isNullOrBlank()) RequestBody.create(mediaType, atual.idGoogle) else null
 
         if (atual.tipoConta == TipoConta.PACIENTE) {
             val nomeBody = RequestBody.create(mediaType, atual.nome)
@@ -229,7 +241,7 @@ class CadastroViewModel : ViewModel() {
             val celularBody = RequestBody.create(mediaType, atual.celular)
             val senhaBody = RequestBody.create(mediaType, atual.senha)
 
-            RetrofitFactory().getPacienteService().cadastrarPaciente(nomeBody, emailBody, celularBody, senhaBody)
+            RetrofitFactory().getPacienteService().cadastrarPaciente(nomeBody, emailBody, celularBody, senhaBody, idGoogleBody)
                 .enqueue(object : Callback<JsonObject> {
                     override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
                         val json = if (response.isSuccessful) {
@@ -278,7 +290,7 @@ class CadastroViewModel : ViewModel() {
             val espBody = RequestBody.create(mediaType, espJson)
 
             RetrofitFactory().getProfissionalService().cadastrarProfissional(
-                nomeBody, emailBody, celularBody, senhaBody, cpfBody, crpBody, instBody, espBody
+                nomeBody, emailBody, celularBody, senhaBody, cpfBody, crpBody, instBody, espBody, idGoogleBody
             ).enqueue(object : Callback<JsonObject> {
                 override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
                     val json = if (response.isSuccessful) {

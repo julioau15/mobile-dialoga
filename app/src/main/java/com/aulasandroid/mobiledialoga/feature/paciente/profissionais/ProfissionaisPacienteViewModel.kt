@@ -23,13 +23,17 @@ import retrofit2.awaitResponse
 /** Status do vínculo no back: 0 = aguardando aceite, 1 = ativo, 2 = recusado. */
 data class ProfissionalVinculadoUi(
     val idProfissional: Int,
+    val idVinculo: Int,
     val nome: String,
     val especialidades: String?,
     val statusVinculo: Int,
+    val origemCadastro: Int, // 1 = profissional convidou, 2 = paciente convidou
     val desdeIso: String?,
     val proximaIso: String?
 ) {
     val atual: Boolean get() = statusVinculo != 2
+    val aguardandoAceite: Boolean get() = statusVinculo == 0
+    val podeAprovar: Boolean get() = aguardandoAceite && origemCadastro == 1
 }
 
 data class ProfissionalBuscaUi(
@@ -60,8 +64,8 @@ class ProfissionaisPacienteViewModel : ViewModel() {
         private set
 
     private class Resp(val conectou: Boolean, val codigo: Int, val corpo: JsonObject?) {
-        // O back responde 404 quando a lista está vazia: não é erro
         val falhou: Boolean get() = !conectou || (codigo !in 200..299 && codigo != 404)
+        val ok: Boolean get() = conectou && codigo in 200..299
     }
 
     fun limparToast() {
@@ -106,9 +110,11 @@ class ProfissionaisPacienteViewModel : ViewModel() {
                     if (id <= 0) return@mapNotNull null
                     ProfissionalVinculadoUi(
                         idProfissional = id,
+                        idVinculo = obj.num("id_vinculo"),
                         nome = obj.txt("nome_completo") ?: "Profissional $id",
                         especialidades = obj.txt("especialidades"),
                         statusVinculo = obj.num("status"),
+                        origemCadastro = obj.num("origem_cadastro"),
                         desdeIso = obj.txt("desde").paraIso(),
                         proximaIso = proximaPorProfissional[id]
                     )
@@ -175,10 +181,9 @@ class ProfissionaisPacienteViewModel : ViewModel() {
     }
 
     // ---------------------------------------------------------------------
-    // Adicionar / remover
+    // Adicionar / remover / aceitar / recusar
     // ---------------------------------------------------------------------
 
-    /** Cria o vínculo (fica "aguardando aceite" até o profissional aceitar). [aoConcluir] fecha o modal. */
     fun adicionar(token: String, idProfissional: Int, aoConcluir: () -> Unit) {
         if (state.salvando) return
         state = state.copy(salvando = true)
@@ -195,7 +200,6 @@ class ProfissionaisPacienteViewModel : ViewModel() {
                 )
                 limparBusca()
                 aoConcluir()
-                state = state.copy(isLoading = false)
                 carregar(token)
             } else {
                 state = state.copy(
@@ -229,6 +233,32 @@ class ProfissionaisPacienteViewModel : ViewModel() {
                     toast = mensagemErroHttp(resp.codigo, !resp.conectou, "remover o profissional"),
                     toastSucesso = false
                 )
+            }
+        }
+    }
+
+    fun aceitarVinculo(token: String, idVinculo: Int, aoConcluir: () -> Unit) {
+        viewModelScope.launch {
+            val resp = chamar { RetrofitFactory().getAgendaService().aceitarVinculo(token, idVinculo) }
+            if (resp.ok) {
+                state = state.copy(toast = "Vínculo aceito com sucesso.", toastSucesso = true)
+                aoConcluir()
+                carregar(token)
+            } else {
+                state = state.copy(toast = mensagemErroHttp(resp.codigo, !resp.conectou, "aceitar o vínculo"), toastSucesso = false)
+            }
+        }
+    }
+
+    fun recusarVinculo(token: String, idVinculo: Int, aoConcluir: () -> Unit) {
+        viewModelScope.launch {
+            val resp = chamar { RetrofitFactory().getAgendaService().recusarVinculo(token, idVinculo) }
+            if (resp.ok) {
+                state = state.copy(toast = "Vínculo recusado.", toastSucesso = true)
+                aoConcluir()
+                carregar(token)
+            } else {
+                state = state.copy(toast = mensagemErroHttp(resp.codigo, !resp.conectou, "recusar o vínculo"), toastSucesso = false)
             }
         }
     }

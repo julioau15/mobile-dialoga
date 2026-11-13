@@ -13,11 +13,17 @@ interface NotificacaoService {
     fun listarNotificacoes(@Header("x-access-token") token: String): Call<JsonObject>
 
     @PUT("notificacoes/{id}/marcar-lida")
-    fun marcarLida(@Path("id") id: Int): Call<JsonObject>
+    fun marcarLida(
+        @Path("id") id: Int,
+        @Header("x-access-token") token: String? = null
+    ): Call<JsonObject>
 
     @PUT("notificacoes/marcar-todas-lidas")
     fun marcarTodasLidas(@Header("x-access-token") token: String): Call<JsonObject>
 
     @DELETE("notificacoes/{id}")
-    fun excluirNotificacao(@Path("id") id: Int): Call<JsonObject>
+    fun excluirNotificacao(
+        @Path("id") id: Int,
+        @Header("x-access-token") token: String? = null
+    ): Call<JsonObject>
 }
