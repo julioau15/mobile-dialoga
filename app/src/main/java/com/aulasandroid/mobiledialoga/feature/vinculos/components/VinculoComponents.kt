@@ -64,17 +64,28 @@ val CorPerigo = Color(0xFFDC2626)
 // ---------------------------------------------------------------------------
 
 @Composable
-fun AvatarIniciais(nome: String, tamanho: Dp = 44.dp, modifier: Modifier = Modifier) {
+fun AvatarIniciais(nome: String, tamanho: Dp = 44.dp, modifier: Modifier = Modifier, fotoUrl: String? = null) {
+    // aceita URL completa ou caminho relativo (mesma regra da foto do perfil)
+    val url = com.aulasandroid.mobiledialoga.model.UserProfile(foto = fotoUrl).getFotoUrlCompleta()
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier.size(tamanho).clip(CircleShape).background(CorAvatarFundo)
     ) {
+        // as iniciais ficam por baixo: se a foto não existir ou falhar ao carregar, elas continuam aparecendo
         Text(
             text = iniciaisDe(nome),
             color = CorPrimaria,
             fontSize = if (tamanho >= 56.dp) 18.sp else 13.sp,
             fontWeight = FontWeight.Bold
         )
+        if (url != null) {
+            coil.compose.AsyncImage(
+                model = url,
+                contentDescription = nome,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
+        }
     }
 }
 

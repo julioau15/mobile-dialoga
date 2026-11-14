@@ -40,13 +40,16 @@ object AgendaRegras {
     // Profissionais com vínculo ativo, sem repetir (vale o vínculo mais recente de cada um), em ordem alfabética
     fun profissionaisVinculados(
         vinculos: List<VinculoDoPaciente>,
-        nomes: Map<Int, String>
+        nomes: Map<Int, String>,
+        especialidades: Map<Int, List<String>> = emptyMap()
     ): List<ProfissionalVinculado> =
         vinculos
             .filter { vinculoAtivo(it.status) && nomes.containsKey(it.idProfissional) }
             .sortedByDescending { it.id }
             .distinctBy { it.idProfissional }
-            .map { ProfissionalVinculado(it.id, it.idProfissional, nomes.getValue(it.idProfissional)) }
+            .map {
+                ProfissionalVinculado(it.id, it.idProfissional, nomes.getValue(it.idProfissional), especialidades[it.idProfissional].orEmpty())
+            }
             .sortedBy { it.nome.lowercase() }
 
     // Sugestões do campo "Profissional": quem tem o texto digitado no nome (sem diferenciar maiúsculas)
@@ -70,7 +73,8 @@ object AgendaRegras {
         dia: Dia?,
         hora: String?,
         hoje: Dia,
-        horaAgora: String
+        horaAgora: String,
+        horarios: HorariosDoProfissional? = null // dias/horários que o profissional atende (null = não carregou)
     ): ErrosDaConsulta {
         val erroProfissional = when {
             !haProfissionais -> "Você ainda não tem um profissional vinculado."
@@ -80,11 +84,13 @@ object AgendaRegras {
         val erroData = when {
             dia == null -> "Informe a data."
             dia < hoje -> "A data não pode estar no passado."
+            horarios != null && dia !in horarios.diasLivres -> "O profissional não atende nesta data."
             else -> null
         }
         val erroHora = when {
             hora == null -> "Informe o horário."
             dia != null && dia == hoje && hora <= horaAgora -> "Esse horário já passou."
+            horarios != null && dia != null && hora !in horarios.horariosDo(dia) -> "Esse horário não está disponível."
             else -> null
         }
         return ErrosDaConsulta(erroProfissional, erroData, erroHora)

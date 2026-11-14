@@ -87,10 +87,21 @@ class LoginViewModel : ViewModel() {
                 val googleData = GoogleSignIn.obterDadosGoogle(context)
                 val auth = try {
                     authState.loginGoogle(googleData.idGoogle, googleData.email)
-                } catch (e: Exception) {
-                    // Se a conta não existe (ou falhou o login com Google), direciona para o cadastro
+                } catch (e: AuthException) {
                     _uiState.value = estado.copy(isGoogleLoading = false)
-                    onCadastrarComGoogle(googleData.idGoogle, googleData.email, googleData.nome)
+                    val msg = (e.message ?: "").lowercase()
+                    when {
+                        // a conta Google ainda não tem cadastro: segue para o cadastro com os dados dela
+                        e.codigo == "USUARIO_NAO_ENCONTRADO" || msg.contains("não cadastrado") ->
+                            onCadastrarComGoogle(googleData.idGoogle, googleData.email, googleData.nome)
+                        e.codigo == "PROFISSIONAL_EM_ANALISE" || e.codigo == "PROFISSIONAL_RECUSADO" ->
+                            onProfissionalEmAnalise()
+                        // qualquer outro erro do servidor é erro mesmo: não manda para o cadastro
+                        else -> _uiState.value = estado.copy(
+                            isGoogleLoading = false,
+                            erroGeral = ErrorTranslator.traduzirLogin(e.message)
+                        )
+                    }
                     return@launch
                 }
                 _uiState.value = estado.copy(isGoogleLoading = false)

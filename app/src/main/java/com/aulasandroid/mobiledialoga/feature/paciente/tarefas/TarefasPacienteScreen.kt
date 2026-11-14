@@ -322,8 +322,8 @@ private fun ListaDeTarefas(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(24.dp)
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 20.dp, vertical = 28.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(if (estado.toastErro) Color(0xFFB91C1C) else Color(0xFF047857))
                     .clickable(onClick = onFecharToast)

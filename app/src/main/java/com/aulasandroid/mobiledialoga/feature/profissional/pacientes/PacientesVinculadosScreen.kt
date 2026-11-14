@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -127,6 +128,7 @@ fun PacientesVinculadosScreen(
                     token?.let { viewModel.carregarAnotacoes(it, p.id) }
                 },
                 onAnotar = { p -> dialogo = Dialogo.NotaRapida(p) },
+                onRemover = { p -> dialogo = Dialogo.RemoverPaciente(p) },
                 onTentarNovamente = { token?.let { viewModel.carregar(it) } },
                 token = token,
                 viewModel = viewModel
@@ -220,6 +222,29 @@ fun PacientesVinculadosScreen(
         ) {
             Text("Tem certeza que deseja excluir esta anotação? Esta ação não pode ser desfeita.", color = CorSecundaria, fontSize = 14.sp)
         }
+        is Dialogo.RemoverPaciente -> ModalDialoga(
+            titulo = "Excluir paciente",
+            onFechar = { dialogo = null },
+            bloqueado = estado.salvando,
+            rodape = {
+                BotaoModalSecundario("Cancelar", onClick = { dialogo = null }, habilitado = !estado.salvando)
+                BotaoModalPrincipal(
+                    texto = "Excluir",
+                    perigo = true,
+                    habilitado = !estado.salvando,
+                    onClick = {
+                        token?.let { t -> viewModel.remover(t, d.paciente.id) { dialogo = null } }
+                    }
+                )
+            }
+        ) {
+            Text(
+                "Tem certeza que deseja remover ${d.paciente.nome} do seu acompanhamento? Você deixará de acompanhar este paciente.",
+                color = CorSecundaria,
+                fontSize = 14.sp,
+                lineHeight = 20.sp
+            )
+        }
         Dialogo.SolicitarAcesso -> ModalDialoga(
             titulo = "Solicitar acesso aos indicadores",
             onFechar = { dialogo = null },
@@ -248,6 +273,7 @@ private sealed class Dialogo {
     object NovaNota : Dialogo()
     class EditarNota(val nota: AnotacaoUi) : Dialogo()
     class ExcluirNota(val notaId: Int) : Dialogo()
+    class RemoverPaciente(val paciente: PacienteVinculadoUi) : Dialogo()
     object SolicitarAcesso : Dialogo()
 }
 
@@ -268,6 +294,7 @@ private fun ListaPacientes(
     onNovoPaciente: () -> Unit,
     onAbrir: (PacienteVinculadoUi) -> Unit,
     onAnotar: (PacienteVinculadoUi) -> Unit,
+    onRemover: (PacienteVinculadoUi) -> Unit,
     onTentarNovamente: () -> Unit,
     token: String?,
     viewModel: PacientesProfissionalViewModel
@@ -368,6 +395,7 @@ private fun ListaPacientes(
                             p,
                             onAbrir = { onAbrir(p) },
                             onAnotar = { onAnotar(p) },
+                            onRemover = { onRemover(p) },
                             onAceitar = { token?.let { viewModel.aceitarVinculo(it, p.idVinculo) {} } },
                             onRecusar = { token?.let { viewModel.recusarVinculo(it, p.idVinculo) {} } }
                         )
@@ -407,6 +435,7 @@ private fun CartaoPaciente(
     p: PacienteVinculadoUi,
     onAbrir: () -> Unit,
     onAnotar: () -> Unit,
+    onRemover: (() -> Unit)? = null,
     onAceitar: (() -> Unit)? = null,
     onRecusar: (() -> Unit)? = null
 ) {
@@ -419,7 +448,7 @@ private fun CartaoPaciente(
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.Top, modifier = Modifier.fillMaxWidth()) {
-                AvatarIniciais(p.nome, tamanho = 48.dp)
+                AvatarIniciais(p.nome, tamanho = 48.dp, fotoUrl = p.foto)
                 EspacoH(14.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -433,8 +462,15 @@ private fun CartaoPaciente(
                     EspacoV(4.dp)
                     StatusPaciente(p)
                 }
-                IconButton(onClick = onAnotar) {
-                    Icon(Icons.Outlined.Description, contentDescription = "Anotar", tint = CorSecundaria, modifier = Modifier.size(20.dp))
+                Row {
+                    IconButton(onClick = onAnotar) {
+                        Icon(Icons.Outlined.Description, contentDescription = "Anotar", tint = CorSecundaria, modifier = Modifier.size(20.dp))
+                    }
+                    if (onRemover != null) {
+                        IconButton(onClick = onRemover) {
+                            Icon(Icons.Outlined.Delete, contentDescription = "Remover paciente", tint = CorSecundaria, modifier = Modifier.size(20.dp))
+                        }
+                    }
                 }
             }
 

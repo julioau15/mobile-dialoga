@@ -37,6 +37,7 @@ import java.util.Locale
 
 private const val MILISSEGUNDOS_POR_DIA = 86_400_000L
 private const val ANOS_A_FRENTE = 5
+private const val ANOS_ATRAS_NASCIMENTO = 130
 
 // Tema claro do app para o calendário (o app usa cores claras fixas, mesmo com o celular em modo escuro).
 // É o mesmo esquema usado no seletor de data da agenda do paciente.
@@ -76,6 +77,12 @@ fun prazoDiaValido(dia: Dia): Boolean {
     return dia >= hoje && dia.ano <= hoje.ano + ANOS_A_FRENTE
 }
 
+/** Nascimento válido: não pode ser futuro nem de mais de 130 anos atrás. */
+fun nascimentoDiaValido(dia: Dia): Boolean {
+    val hoje = Dia.hoje()
+    return dia <= hoje && dia.ano >= hoje.ano - ANOS_ATRAS_NASCIMENTO
+}
+
 /**
  * Campo de data que NÃO é digitado: ao tocar (ou no ícone de calendário) abre o mesmo calendário
  * Material 3 do campo de data da agenda. O valor é guardado como ISO "yyyy-MM-dd".
@@ -91,7 +98,8 @@ fun CampoDataCalendario(
     rotulo: String? = null,
     placeholder: String = "dd/mm/aaaa",
     erro: String? = null,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    dataNascimento: Boolean = false // true = aceita datas passadas (e não futuras), em vez de prazos futuros
 ) {
     var mostrarCalendario by remember { mutableStateOf(false) }
     var erroLocal by remember { mutableStateOf<String?>(null) }
@@ -143,14 +151,16 @@ fun CampoDataCalendario(
         SeletorDataCalendario(
             inicial = dia,
             onConfirmar = { escolhido ->
-                if (prazoDiaValido(escolhido)) {
+                val valido = if (dataNascimento) nascimentoDiaValido(escolhido) else prazoDiaValido(escolhido)
+                if (valido) {
                     erroLocal = null
                     onPrazoChange(diaParaIso(escolhido))
                 } else {
-                    erroLocal = "Escolha uma data a partir de hoje."
+                    erroLocal = if (dataNascimento) "Escolha uma data de nascimento válida." else "Escolha uma data a partir de hoje."
                     onPrazoChange(null)
                 }
             },
+            dataNascimento = dataNascimento,
             onFechar = { mostrarCalendario = false }
         )
     }
@@ -162,12 +172,15 @@ fun CampoDataCalendario(
 private fun SeletorDataCalendario(
     inicial: Dia?,
     onConfirmar: (Dia) -> Unit,
+    dataNascimento: Boolean,
     onFechar: () -> Unit
 ) {
     val hoje = Dia.hoje()
+    val padrao = if (dataNascimento) Dia(hoje.ano - 25, 1, 1) else hoje
+    val faixaAnos = if (dataNascimento) (hoje.ano - ANOS_ATRAS_NASCIMENTO)..hoje.ano else hoje.ano..(hoje.ano + ANOS_A_FRENTE)
     val estado = rememberDatePickerState(
-        initialSelectedDateMillis = (inicial ?: hoje).let { it.diasDesdeEpoca() * MILISSEGUNDOS_POR_DIA },
-        yearRange = hoje.ano..(hoje.ano + ANOS_A_FRENTE)
+        initialSelectedDateMillis = (inicial ?: padrao).let { it.diasDesdeEpoca() * MILISSEGUNDOS_POR_DIA },
+        yearRange = faixaAnos
     )
     MaterialTheme(colorScheme = EsquemaClaroSeletor) {
         DatePickerDialog(

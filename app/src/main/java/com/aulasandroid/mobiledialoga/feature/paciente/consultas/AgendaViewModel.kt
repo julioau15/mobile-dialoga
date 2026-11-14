@@ -74,16 +74,75 @@ class AgendaViewModel : ViewModel() {
 
     // Digitar de novo desfaz o profissional escolhido (a escolha vale pelo que está escrito no campo)
     fun onProfissionalTextoChange(texto: String) = atualizarFormulario {
-        it.copy(profissionalTexto = texto, profissional = null, erroProfissional = null, erroGeral = null)
+        it.copy(
+            profissionalTexto = texto, profissional = null, erroProfissional = null, erroGeral = null,
+            especialidade = "", horarios = null, carregandoHorarios = false, erroHorarios = null, data = null, hora = null
+        )
     }
 
-    fun onProfissionalEscolhido(profissional: ProfissionalVinculado) = atualizarFormulario {
-        it.copy(profissionalTexto = profissional.nome, profissional = profissional, erroProfissional = null, erroGeral = null)
+    /**
+     * Ao escolher o profissional: a especialidade vem do cadastro dele (já preenchida se ele tem só uma) e
+     * busca no servidor os dias e horários em que ele atende. Data e horário só podem ser escolhidos dali.
+     */
+    fun onProfissionalEscolhido(profissional: ProfissionalVinculado, token: String?) {
+        atualizarFormulario {
+            it.copy(
+                profissionalTexto = profissional.nome,
+                profissional = profissional,
+                erroProfissional = null,
+                erroGeral = null,
+                especialidade = profissional.especialidades.singleOrNull().orEmpty(),
+                horarios = null,
+                carregandoHorarios = true,
+                erroHorarios = null,
+                data = null,
+                hora = null
+            )
+        }
+        carregarHorarios(profissional, token)
+    }
+
+    private fun carregarHorarios(profissional: ProfissionalVinculado, token: String?) {
+        if (token.isNullOrBlank()) {
+            atualizarFormulario { it.copy(carregandoHorarios = false, erroHorarios = ERRO_SESSAO) }
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val horarios = repositorio.horarios(token, profissional.idVinculo)
+                atualizarSeAindaEhEste(profissional) {
+                    it.copy(
+                        horarios = horarios,
+                        carregandoHorarios = false,
+                        // se o profissional não tem especialidade no cadastro de agora, usa as que o servidor devolveu
+                        especialidade = it.especialidade.ifBlank { horarios.especialidades.singleOrNull().orEmpty() }
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                atualizarSeAindaEhEste(profissional) { it.copy(carregandoHorarios = false, erroHorarios = mensagemDe(e)) }
+            }
+        }
+    }
+
+    // A resposta pode chegar depois de a pessoa já ter trocado de profissional: aí é ignorada
+    private fun atualizarSeAindaEhEste(profissional: ProfissionalVinculado, mudar: (NovaConsultaForm) -> NovaConsultaForm) {
+        val atual = estado.formulario ?: return
+        if (atual.profissional?.idVinculo != profissional.idVinculo) return
+        _uiState.value = estado.copy(formulario = mudar(atual))
     }
 
     fun onEspecialidadeChange(texto: String) = atualizarFormulario { it.copy(especialidade = texto, erroGeral = null) }
 
-    fun onDataChange(dia: Dia) = atualizarFormulario { it.copy(data = dia, erroData = null, erroHora = null, erroGeral = null) }
+    // Trocar a data limpa o horário (cada dia tem os seus horários livres); se só sobra um, já fica escolhido
+    fun onDataChange(dia: Dia) = atualizarFormulario {
+        it.copy(
+            data = dia,
+            hora = it.horarios?.horariosDo(dia)?.singleOrNull(),
+            erroData = null, erroHora = null, erroGeral = null
+        )
+    }
 
     fun onHoraChange(hora: String) = atualizarFormulario { it.copy(hora = hora, erroHora = null, erroGeral = null) }
 
@@ -104,10 +163,8 @@ class AgendaViewModel : ViewModel() {
         val form = estado.formulario ?: return
         if (estado.salvando) return
 
-        // Texto digitado que bate com o nome de um profissional vinculado vale como escolhido
-        val profissional = form.profissional ?: estado.profissionais.firstOrNull {
-            it.nome.equals(form.profissionalTexto.trim(), ignoreCase = true)
-        }
+        // O profissional precisa ter sido escolhido da lista (é dela que vêm o vínculo e os horários)
+        val profissional = form.profissional
 
         val erros = AgendaRegras.validarNovaConsulta(
             profissional = profissional,
@@ -115,7 +172,8 @@ class AgendaViewModel : ViewModel() {
             dia = form.data,
             hora = form.hora,
             hoje = Dia.hoje(),
-            horaAgora = Dia.horaAgora()
+            horaAgora = Dia.horaAgora(),
+            horarios = form.horarios
         )
         _uiState.value = estado.copy(
             formulario = form.copy(
@@ -127,6 +185,13 @@ class AgendaViewModel : ViewModel() {
             )
         )
         if (erros.temErro) return
+
+        if (form.horarios == null) {
+            atualizarFormulario {
+                it.copy(erroGeral = if (it.carregandoHorarios) "Aguarde: os horários do profissional ainda estão carregando." else (it.erroHorarios ?: ERRO_GENERICO))
+            }
+            return
+        }
 
         if (token.isNullOrBlank()) {
             atualizarFormulario { it.copy(erroGeral = ERRO_SESSAO) }
@@ -144,6 +209,8 @@ class AgendaViewModel : ViewModel() {
             } catch (e: Exception) {
                 _uiState.value = estado.copy(salvando = false)
                 atualizarFormulario { it.copy(erroGeral = mensagemDe(e)) }
+                // pode ser que alguém tenha pego o horário: recarrega a lista de horários livres
+                carregarHorarios(profissional!!, token)
                 return@launch
             }
 

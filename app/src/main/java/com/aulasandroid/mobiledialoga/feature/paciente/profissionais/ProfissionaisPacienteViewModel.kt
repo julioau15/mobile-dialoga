@@ -29,7 +29,8 @@ data class ProfissionalVinculadoUi(
     val statusVinculo: Int,
     val origemCadastro: Int, // 1 = profissional convidou, 2 = paciente convidou
     val desdeIso: String?,
-    val proximaIso: String?
+    val proximaIso: String?,
+    val foto: String? = null
 ) {
     val atual: Boolean get() = statusVinculo != 2
     val aguardandoAceite: Boolean get() = statusVinculo == 0
@@ -116,7 +117,8 @@ class ProfissionaisPacienteViewModel : ViewModel() {
                         statusVinculo = obj.num("status"),
                         origemCadastro = obj.num("origem_cadastro"),
                         desdeIso = obj.txt("desde").paraIso(),
-                        proximaIso = proximaPorProfissional[id]
+                        proximaIso = proximaPorProfissional[id],
+                        foto = obj.txt("foto_avatar")
                     )
                 } catch (_: Exception) {
                     null

@@ -51,6 +51,41 @@ object AgendaJson {
             }
             .toMap()
 
+    // GET /pacientes/me/profissionais -> { id do profissional: especialidades } (vem como "A, B" numa string só)
+    fun especialidadesDosProfissionais(json: JsonObject?): Map<Int, List<String>> =
+        lista(json, "profissional")
+            .mapNotNull { item ->
+                val id = item.inteiro("id") ?: return@mapNotNull null
+                val nomes = item.texto("especialidades").orEmpty()
+                    .split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                id to nomes
+            }
+            .toMap()
+
+    // GET /consultas/vinculos/{id}/horarios -> dias e horários livres do profissional
+    fun horarios(json: JsonObject?): HorariosDoProfissional? {
+        val h = json?.get("response")?.takeIf { it.isJsonObject }?.asJsonObject
+            ?.get("horarios")?.takeIf { it.isJsonObject }?.asJsonObject ?: return null
+
+        val especialidades = h.get("especialidades")?.takeIf { it.isJsonArray }?.asJsonArray
+            ?.mapNotNull { if (it.isJsonPrimitive) it.asString else null }.orEmpty()
+
+        val dias = h.get("dias")?.takeIf { it.isJsonArray }?.asJsonArray.orEmptyList().mapNotNull { el ->
+            if (!el.isJsonObject) return@mapNotNull null
+            val o = el.asJsonObject
+            val dia = Dia.deIso(o.texto("data")) ?: return@mapNotNull null
+            val horas = o.get("horarios")?.takeIf { it.isJsonArray }?.asJsonArray
+                ?.mapNotNull { if (it.isJsonPrimitive) it.asString.take(5) else null }.orEmpty()
+            if (horas.isEmpty()) null else DiaLivre(dia, horas)
+        }.sortedBy { it.dia }
+
+        val cadastrou = h.get("cadastrou_disponibilidade")?.takeIf { it.isJsonPrimitive }?.asBoolean ?: true
+        return HorariosDoProfissional(especialidades, dias, cadastrou)
+    }
+
+    private fun com.google.gson.JsonArray?.orEmptyList(): List<com.google.gson.JsonElement> =
+        this?.toList().orEmpty()
+
     // GET /consultas -> as consultas (de todos): o filtro por vínculo é feito em [consultasDosVinculos]
     fun consultas(json: JsonObject?): List<Consulta> = lista(json, "consulta").mapNotNull { paraConsulta(it) }
 
@@ -66,8 +101,8 @@ object AgendaJson {
         if (hora.length != 5 || hora[2] != ':') return null
         return Consulta(
             id = id,
-            // (sic) a coluna do banco se chama "nome_da_conculta"
-            titulo = item.texto("nome_da_conculta") ?: "Consulta",
+            // o back já devolveu este campo com dois nomes (um com erro de digitação): aceita os dois
+            titulo = item.texto("nome_da_consulta") ?: item.texto("nome_da_conculta") ?: "Consulta",
             especialidade = item.texto("especialidade")?.takeIf { it.isNotBlank() },
             dia = dia,
             hora = hora,

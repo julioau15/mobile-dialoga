@@ -75,7 +75,6 @@ fun NovaConsultaDialog(
     onFechar: () -> Unit
 ) {
     var mostrarSeletorData by remember { mutableStateOf(false) }
-    var mostrarSeletorHora by remember { mutableStateOf(false) }
 
     DialogaDialogo(
         titulo = "Nova consulta",
@@ -102,11 +101,21 @@ fun NovaConsultaDialog(
         )
         Spacer(modifier = Modifier.height(16.dp))
 
-        DialogaTextField(
+        val profissionalEscolhido = formulario.profissional
+        val horarios = formulario.horarios
+
+        CampoLista(
             rotulo = "Especialidade",
-            placeholder = "Ex: Psicologia Clínica",
-            value = formulario.especialidade,
-            onValueChange = onEspecialidade
+            valor = formulario.especialidade,
+            placeholder = when {
+                profissionalEscolhido == null -> "Escolha o profissional primeiro"
+                profissionalEscolhido.especialidades.isEmpty() -> "Sem especialidade cadastrada"
+                else -> "Selecione a especialidade"
+            },
+            opcoes = profissionalEscolhido?.especialidades.orEmpty(),
+            habilitado = profissionalEscolhido != null && profissionalEscolhido.especialidades.size > 1,
+            erro = null,
+            onEscolher = onEspecialidade
         )
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -114,18 +123,43 @@ fun NovaConsultaDialog(
             CampoQueAbreSeletor(
                 rotulo = "Data",
                 valor = formulario.data?.let { AgendaCalendario.dataCurta(it) } ?: "",
-                placeholder = "dd/mm/aaaa",
+                placeholder = when {
+                    profissionalEscolhido == null -> "Escolha o profissional"
+                    formulario.carregandoHorarios -> "Carregando..."
+                    else -> "dd/mm/aaaa"
+                },
                 erro = formulario.erroData,
+                habilitado = horarios != null && horarios.dias.isNotEmpty(),
                 onClick = { mostrarSeletorData = true },
                 modifier = Modifier.weight(1f)
             )
-            CampoQueAbreSeletor(
+            CampoLista(
                 rotulo = "Horário",
                 valor = formulario.hora ?: "",
-                placeholder = "hh:mm",
+                placeholder = if (formulario.data == null) "Escolha a data" else "hh:mm",
+                opcoes = horarios?.horariosDo(formulario.data).orEmpty(),
+                habilitado = formulario.data != null,
                 erro = formulario.erroHora,
-                onClick = { mostrarSeletorHora = true },
+                obrigatorio = true,
+                onEscolher = onHora,
                 modifier = Modifier.weight(1f)
+            )
+        }
+
+        // Aviso do que está acontecendo com os horários do profissional
+        val avisoHorarios = when {
+            formulario.erroHorarios != null -> formulario.erroHorarios
+            horarios != null && !horarios.cadastrouDisponibilidade -> "Este profissional ainda não cadastrou os horários de atendimento."
+            horarios != null && horarios.dias.isEmpty() -> "Este profissional não tem horários livres nos próximos dias."
+            horarios != null -> "Só aparecem os dias e horários em que o profissional atende."
+            else -> null
+        }
+        if (avisoHorarios != null) {
+            Text(
+                text = avisoHorarios,
+                color = if (formulario.erroHorarios != null) CorErro else CorSecundaria,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 6.dp)
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -172,18 +206,12 @@ fun NovaConsultaDialog(
         }
     }
 
-    if (mostrarSeletorData) {
+    if (mostrarSeletorData && formulario.horarios != null) {
         SeletorDeData(
             inicial = formulario.data,
+            diasLivres = formulario.horarios.diasLivres,
             onConfirmar = onData,
             onFechar = { mostrarSeletorData = false }
-        )
-    }
-    if (mostrarSeletorHora) {
-        SeletorDeHora(
-            inicial = formulario.hora,
-            onConfirmar = onHora,
-            onFechar = { mostrarSeletorHora = false }
         )
     }
 }
@@ -258,7 +286,8 @@ private fun CampoQueAbreSeletor(
     placeholder: String,
     erro: String?,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    habilitado: Boolean = true
 ) {
     Column(modifier = modifier) {
         RotuloObrigatorio(rotulo)
@@ -275,7 +304,60 @@ private fun CampoQueAbreSeletor(
                 modifier = Modifier.fillMaxWidth()
             )
             // Camada transparente por cima para receber o toque (um campo readOnly não abre nada sozinho)
-            Box(modifier = Modifier.matchParentSize().clickable(onClick = onClick))
+            if (habilitado) Box(modifier = Modifier.matchParentSize().clickable(onClick = onClick))
+        }
+        MensagemErroCampo(erro)
+    }
+}
+
+// Campo que não digita: ao tocar abre uma lista de opções (Especialidade e Horário)
+@Composable
+private fun CampoLista(
+    rotulo: String,
+    valor: String,
+    placeholder: String,
+    opcoes: List<String>,
+    habilitado: Boolean,
+    erro: String?,
+    onEscolher: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    obrigatorio: Boolean = false
+) {
+    var aberta by remember { mutableStateOf(false) }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (obrigatorio) RotuloObrigatorio(rotulo) else RotuloCampo(rotulo)
+        Box {
+            OutlinedTextField(
+                value = valor,
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                enabled = habilitado || valor.isNotEmpty(),
+                isError = erro != null,
+                placeholder = { Text(text = placeholder, fontSize = 14.sp) },
+                shape = FormatoCampo,
+                colors = coresCampo(),
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (habilitado && opcoes.isNotEmpty()) {
+                Box(modifier = Modifier.matchParentSize().clickable { aberta = true })
+            }
+            DropdownMenu(
+                expanded = aberta,
+                onDismissRequest = { aberta = false },
+                containerColor = CorBranco
+            ) {
+                opcoes.forEach { opcao ->
+                    DropdownMenuItem(
+                        text = { Text(text = opcao, color = CorTexto, fontSize = 14.sp) },
+                        onClick = {
+                            onEscolher(opcao)
+                            aberta = false
+                        }
+                    )
+                }
+            }
         }
         MensagemErroCampo(erro)
     }
@@ -286,11 +368,27 @@ private fun CampoQueAbreSeletor(
 @Composable
 private fun SeletorDeData(
     inicial: Dia?,
+    diasLivres: Set<Dia>,
     onConfirmar: (Dia) -> Unit,
     onFechar: () -> Unit
 ) {
+    // Só os dias em que o profissional atende (e nunca antes de hoje) podem ser tocados; os outros ficam apagados
+    val hoje = remember { Dia.hoje() }
+    val anos = remember(diasLivres) { diasLivres.map { it.ano } }
+    val anoMinimo = anos.minOrNull() ?: hoje.ano
+    val anoMaximo = anos.maxOrNull() ?: hoje.ano
     val estado = rememberDatePickerState(
-        initialSelectedDateMillis = inicial?.let { it.diasDesdeEpoca() * MILISSEGUNDOS_POR_DIA }
+        initialSelectedDateMillis = inicial?.let { it.diasDesdeEpoca() * MILISSEGUNDOS_POR_DIA },
+        initialDisplayedMonthMillis = (diasLivres.minOrNull() ?: hoje).let { it.diasDesdeEpoca() * MILISSEGUNDOS_POR_DIA },
+        yearRange = anoMinimo..anoMaximo,
+        selectableDates = object : SelectableDates {
+            override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                val dia = Dia.deEpoca(Math.floorDiv(utcTimeMillis, MILISSEGUNDOS_POR_DIA))
+                return dia >= hoje && dia in diasLivres
+            }
+
+            override fun isSelectableYear(year: Int): Boolean = year in anoMinimo..anoMaximo
+        }
     )
     MaterialTheme(colorScheme = EsquemaClaro) {
         DatePickerDialog(
@@ -306,53 +404,6 @@ private fun SeletorDeData(
             dismissButton = { TextButton(onClick = onFechar) { Text("Cancelar") } }
         ) {
             DatePicker(state = estado)
-        }
-    }
-}
-
-// Relógio do Material 3, em 24 horas
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SeletorDeHora(
-    inicial: String?,
-    onConfirmar: (String) -> Unit,
-    onFechar: () -> Unit
-) {
-    val horaInicial = inicial?.take(2)?.toIntOrNull() ?: 9
-    val minutoInicial = inicial?.takeLast(2)?.toIntOrNull() ?: 0
-    val estado = rememberTimePickerState(initialHour = horaInicial, initialMinute = minutoInicial, is24Hour = true)
-
-    MaterialTheme(colorScheme = EsquemaClaro) {
-        Dialog(onDismissRequest = onFechar) {
-            Surface(shape = RoundedCornerShape(18.dp), color = CorBranco, shadowElevation = 8.dp) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(24.dp)
-                ) {
-                    Text(
-                        text = "Selecione o horário",
-                        color = CorTexto,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.align(Alignment.Start)
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
-                    TimePicker(state = estado)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Row(
-                        horizontalArrangement = Arrangement.End,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        TextButton(onClick = onFechar) { Text("Cancelar") }
-                        TextButton(
-                            onClick = {
-                                onConfirmar(String.format(Locale.ROOT, "%02d:%02d", estado.hour, estado.minute))
-                                onFechar()
-                            }
-                        ) { Text("OK") }
-                    }
-                }
-            }
         }
     }
 }

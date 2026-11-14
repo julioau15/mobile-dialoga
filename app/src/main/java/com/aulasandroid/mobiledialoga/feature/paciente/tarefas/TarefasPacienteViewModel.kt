@@ -652,17 +652,11 @@ class TarefasPacienteViewModel : ViewModel() {
             return
         }
         val idDestinatario = tarefa.idTarefaDestinatario?.takeIf { it > 0 } ?: tarefa.id
-        val idPaciente = idDoToken(tk)
-        if (idPaciente == null) {
-            _uiState.value = estado.copy(toastMensagem = "Sessão inválida. Entre novamente.", toastErro = true)
-            return
-        }
         if (!concluindoIds.add(idDestinatario)) return
 
         val atualizacao = JsonObject().apply {
             addProperty("status", "concluida")
             addProperty("id_tarefa", tarefa.id)
-            addProperty("id_paciente", idPaciente)
             addProperty("data_conclusao", agoraParaBanco())
             tarefa.prazo?.take(10)?.takeIf { it.length == 10 }?.let { addProperty("prazo", it) }
         }

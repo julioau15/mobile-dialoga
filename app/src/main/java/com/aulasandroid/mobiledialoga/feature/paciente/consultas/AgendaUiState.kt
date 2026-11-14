@@ -5,6 +5,10 @@ data class NovaConsultaForm(
     val profissionalTexto: String = "",
     val profissional: ProfissionalVinculado? = null, // só vale quando o usuário escolhe um da lista
     val especialidade: String = "",
+    // dias/horários que o profissional escolhido atende (null enquanto carrega ou se falhar)
+    val horarios: HorariosDoProfissional? = null,
+    val carregandoHorarios: Boolean = false,
+    val erroHorarios: String? = null,
     val data: Dia? = null,
     val hora: String? = null,
     // O back ainda não guarda observações nem lembrete (a tabela de consultas não tem esses campos):

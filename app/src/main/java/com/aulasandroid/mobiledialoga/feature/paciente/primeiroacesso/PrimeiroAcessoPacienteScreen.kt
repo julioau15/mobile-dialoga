@@ -33,6 +33,7 @@ import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.BuscaPes
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.Cabecalho
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.CampoDeTexto
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.CartaoAviso
+import com.aulasandroid.mobiledialoga.components.CampoDataCalendario
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.DataVisualTransformation
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.DialogoVinculo
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.EscolhaBinaria
@@ -71,8 +72,7 @@ fun PrimeiroAcessoPacienteScreen(
 
     // Dados da Etapa 1
     var apelido by rememberSaveable { mutableStateOf("") }
-    var nascimento by rememberSaveable { mutableStateOf("") }
-    var nascimentoErro by remember { mutableStateOf<String?>(null) }
+    var nascimentoIso by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Dados da Etapa 2
     var temProfissional by rememberSaveable { mutableStateOf<Boolean?>(null) }
@@ -109,7 +109,7 @@ fun PrimeiroAcessoPacienteScreen(
     val finalizarComDados: () -> Unit = {
         val dados = JsonObject().apply {
             addProperty("apelido", apelido.trim().ifBlank { null })
-            addProperty("data_nascimento", dataDigitosParaIso(nascimento))
+            addProperty("data_nascimento", nascimentoIso)
             addProperty(
                 "id_profissional",
                 if (temProfissional == true) profissionalSelecionado?.id else null
@@ -148,32 +148,18 @@ fun PrimeiroAcessoPacienteScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
                 RotuloCampo(texto = "Data de nascimento", opcional = true)
-                CampoDeTexto(
-                    valor = nascimento,
-                    onValorChange = { nova ->
-                        nascimento = nova.filter { it.isDigit() }.take(8)
-                        nascimentoErro = null
-                    },
-                    placeholder = "dd/mm/aaaa",
-                    icone = Icons.Default.DateRange,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    visualTransformation = DataVisualTransformation(),
-                    erro = nascimentoErro
+                CampoDataCalendario(
+                    prazoIso = nascimentoIso,
+                    onPrazoChange = { nascimentoIso = it },
+                    dataNascimento = true
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
-                val podeContinuar1 = apelido.trim().isNotBlank() && nascimento.length == 8 && dataDigitosParaIso(nascimento) != null
+                val podeContinuar1 = apelido.trim().isNotBlank() && nascimentoIso != null
                 BotaoPrimario(
                     texto = "Continuar →",
                     habilitado = podeContinuar1,
-                    onClick = {
-                        val iso = dataDigitosParaIso(nascimento)
-                        if (nascimento.isNotEmpty() && iso == null) {
-                            nascimentoErro = "Data inválida ou fora do limite permitido"
-                        } else {
-                            etapa = 2
-                        }
-                    }
+                    onClick = { etapa = 2 }
                 )
                 BotaoTexto(texto = "Pular por enquanto", onClick = { etapa = 2 })
             }

@@ -1,13 +1,15 @@
 package com.aulasandroid.mobiledialoga.feature.auth.login
 
-import android.accounts.AccountManager
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.util.Base64
+import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -41,46 +43,46 @@ object GoogleSignIn {
         return obterDadosGoogle(context).idGoogle
     }
 
+    /**
+     * Esquece a conta Google escolhida neste app. Chamado no logout: assim o próximo "Entrar com Google"
+     * mostra o seletor de contas de novo, em vez de reaproveitar a conta da vez anterior.
+     */
+    suspend fun limparSessao(context: Context) {
+        try {
+            CredentialManager.create(context).clearCredentialState(ClearCredentialStateRequest())
+        } catch (_: Exception) {
+            // não conseguir limpar não pode travar o logout
+        }
+    }
+
     suspend fun obterDadosGoogle(context: Context): GoogleUserData {
         val activity = context.findActivity() ?: context
+        val gerenciador = CredentialManager.create(activity)
 
+        // O seletor de contas SEMPRE aparece e a conta devolvida é a que a pessoa tocou.
+        // Se a pessoa fechar o seletor, GetCredentialCancellationException sobe até o ViewModel (não é erro).
+        // Não existe "plano B" que escolha uma conta sozinho: antes, quando o seletor falhava, o app pegava a
+        // primeira conta do aparelho (AccountManager) e entrava sempre na mesma conta.
         val resultado = try {
-            val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(GOOGLE_WEB_CLIENT_ID)
-                .build()
+            val signInWithGoogleOption = GetSignInWithGoogleOption.Builder(GOOGLE_WEB_CLIENT_ID).build()
             val pedido = GetCredentialRequest.Builder()
                 .addCredentialOption(signInWithGoogleOption)
                 .build()
-            CredentialManager.create(activity).getCredential(activity, pedido)
-        } catch (e: Exception) {
-            try {
-                val googleIdOption = GetGoogleIdOption.Builder()
-                    .setFilterByAuthorizedAccounts(false)
-                    .setServerClientId(GOOGLE_WEB_CLIENT_ID)
-                    .setAutoSelectEnabled(false)
-                    .build()
-                val pedidoFallback = GetCredentialRequest.Builder()
-                    .addCredentialOption(googleIdOption)
-                    .build()
-                CredentialManager.create(activity).getCredential(activity, pedidoFallback)
-            } catch (e2: Exception) {
-                // Fallback robusto via AccountManager caso o CredentialManager falhe (ex: SHA-1 ou Web Client ID)
-                try {
-                    val accountManager = AccountManager.get(activity)
-                    val accounts = accountManager.getAccountsByType("com.google")
-                    val account = accounts.firstOrNull()
-                    if (account != null) {
-                        val email = account.name
-                        val idGoogle = "google_${Math.abs(email.hashCode())}"
-                        val nome = email.substringBefore("@").replaceFirstChar { it.uppercase() }
-                        return GoogleUserData(
-                            idGoogle = idGoogle,
-                            email = email,
-                            nome = nome
-                        )
-                    }
-                } catch (_: Exception) { }
-                throw e2
-            }
+            gerenciador.getCredential(activity, pedido)
+        } catch (e: GetCredentialCancellationException) {
+            throw e
+        } catch (e: NoCredentialException) {
+            // Só quando o aparelho não devolve nenhuma conta pelo fluxo acima, tenta o seletor em folha
+            // (também sem escolher conta automaticamente).
+            val googleIdOption = GetGoogleIdOption.Builder()
+                .setFilterByAuthorizedAccounts(false)
+                .setServerClientId(GOOGLE_WEB_CLIENT_ID)
+                .setAutoSelectEnabled(false)
+                .build()
+            val pedidoFallback = GetCredentialRequest.Builder()
+                .addCredentialOption(googleIdOption)
+                .build()
+            gerenciador.getCredential(activity, pedidoFallback)
         }
 
         val credencial = resultado.credential

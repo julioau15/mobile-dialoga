@@ -30,6 +30,13 @@ interface AgendaService {
     @GET("consultas")
     fun getConsultas(@Header("x-access-token") token: String): Call<JsonObject>
 
+    // Dias e horários livres do profissional do vínculo (já sem passado, sem horário ocupado)
+    @GET("consultas/vinculos/{id}/horarios")
+    fun getHorarios(
+        @Header("x-access-token") token: String,
+        @Path("id") idVinculo: Int
+    ): Call<JsonObject>
+
     // O back compara o Content-Type exatamente com "application/json" (sem charset): por isso o @Headers
     @Headers("Content-Type: application/json")
     @POST("consultas")

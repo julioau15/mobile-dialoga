@@ -53,7 +53,11 @@ fun NotificacaoItem.rotuloCategoria(perfil: PerfilNotificacao): String = when (i
 }
 
 fun NotificacaoItem.titulo(perfil: PerfilNotificacao): String = when (idCategoria) {
-    1 -> "Lembrete de consulta"
+    1 -> when (referencia) {
+        "nova_consulta" -> "Nova consulta"
+        "consulta_alterada" -> "Consulta reagendada"
+        else -> "Lembrete de consulta"
+    }
     2 -> "Consulta cancelada"
     3 -> if (perfil == PerfilNotificacao.PACIENTE) "Nova tarefa recebida" else "Atualização de tarefa"
     4 -> if (perfil == PerfilNotificacao.PACIENTE) "Atualização de vínculo" else "Solicitação de acompanhamento"

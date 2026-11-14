@@ -30,7 +30,8 @@ data class PacienteVinculadoUi(
     val origemCadastro: Int, // 1 = profissional convidou, 2 = paciente convidou
     val desdeIso: String?,
     val email: String?, // o back só devolve contato depois que o vínculo é aceito
-    val celular: String?
+    val celular: String?,
+    val foto: String? = null
 ) {
     val aguardandoAceite: Boolean get() = statusVinculo == 0
     val podeAprovar: Boolean get() = aguardandoAceite && origemCadastro == 2
@@ -140,7 +141,8 @@ class PacientesProfissionalViewModel : ViewModel() {
                         origemCadastro = obj.num("origem_cadastro"),
                         desdeIso = obj.txt("desde").paraIso(),
                         email = obj.txt("email"),
-                        celular = obj.txt("celular")
+                        celular = obj.txt("celular"),
+                        foto = obj.txt("foto_avatar")
                     )
                 } catch (_: Exception) {
                     null
@@ -221,6 +223,29 @@ class PacientesProfissionalViewModel : ViewModel() {
                 state = state.copy(
                     salvando = false,
                     toast = mensagemErroHttp(resp.codigo, !resp.conectou, "adicionar o paciente"),
+                    toastSucesso = false
+                )
+            }
+        }
+    }
+
+    /** Remove o vínculo com o paciente (o back apaga a linha do vínculo). */
+    fun remover(token: String, idPaciente: Int, aoConcluir: () -> Unit) {
+        if (state.salvando) return
+        state = state.copy(salvando = true)
+
+        viewModelScope.launch {
+            val resp = chamar {
+                RetrofitFactory().getProfissionalService().desvincularPaciente(token, idPaciente.toString())
+            }
+            if (resp.conectou && resp.codigo in 200..299) {
+                state = state.copy(salvando = false, toast = "Paciente removido do acompanhamento.", toastSucesso = true)
+                aoConcluir()
+                carregar(token)
+            } else {
+                state = state.copy(
+                    salvando = false,
+                    toast = mensagemErroHttp(resp.codigo, !resp.conectou, "remover o paciente"),
                     toastSucesso = false
                 )
             }
@@ -310,7 +335,7 @@ class PacientesProfissionalViewModel : ViewModel() {
             val service = RetrofitFactory().getAnotacaoService()
             val resp = chamar {
                 if (idNota == null) service.criarAnotacaoDoPaciente(token, idPaciente, corpo)
-                else service.atualizarAnotacao(idNota, corpo)
+                else service.atualizarAnotacao(token, idNota, corpo)
             }
             if (resp.ok) {
                 state = state.copy(salvando = false, toast = "Anotação salva com sucesso.", toastSucesso = true)
@@ -331,7 +356,7 @@ class PacientesProfissionalViewModel : ViewModel() {
         state = state.copy(salvando = true)
 
         viewModelScope.launch {
-            val resp = chamar { RetrofitFactory().getAnotacaoService().excluirAnotacao(idNota) }
+            val resp = chamar { RetrofitFactory().getAnotacaoService().excluirAnotacao(token, idNota) }
             if (resp.ok) {
                 state = state.copy(salvando = false, toast = "Anotação excluída.", toastSucesso = true)
                 aoConcluir()

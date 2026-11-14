@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.delay
 import com.aulasandroid.mobiledialoga.R
 import com.aulasandroid.mobiledialoga.components.DialogaLayout
 import com.aulasandroid.mobiledialoga.components.DialogaMenuItem
@@ -34,18 +35,28 @@ fun ProfissionalScreen(onLogout: () -> Unit) {
         authState.carregarPerfilMeu()
     }
 
+    // Atualiza as bolinhas ao trocar de tela e a cada 30 segundos
+    LaunchedEffect(subRotaAtual) { authState.verificarNovasNotificacoes() }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            authState.verificarNovasNotificacoes()
+        }
+    }
+
+    val avisos = authState.avisos
     val profile = authState.userProfile
     val nomeExibicao = profile?.getNomeExibicao() ?: "Profissional"
     val iniciais = profile?.getIniciais() ?: "PR"
     val fotoUrl = profile?.getFotoUrlCompleta()
 
-    val itensMenu = remember {
+    val itensMenu = remember(avisos) {
         listOf(
             DialogaMenuItem("dashboard", "Dashboard", iconeRes = R.drawable.ic_sidebar_dashboard),
-            DialogaMenuItem("tarefas", "Tarefas", iconeRes = R.drawable.ic_sidebar_tarefas),
+            DialogaMenuItem("tarefas", "Tarefas", iconeRes = R.drawable.ic_sidebar_tarefas, aviso = avisos.tarefas),
             DialogaMenuItem("pacientes", "Pacientes", iconeRes = R.drawable.ic_sidebar_profissionais),
-            DialogaMenuItem("agenda", "Agenda", iconeRes = R.drawable.ic_sidebar_agenda),
-            DialogaMenuItem("notificacoes", "Notificações", iconeRes = R.drawable.ic_sidebar_notificacao),
+            DialogaMenuItem("agenda", "Agenda", iconeRes = R.drawable.ic_sidebar_agenda, aviso = avisos.agenda),
+            DialogaMenuItem("notificacoes", "Notificações", iconeRes = R.drawable.ic_sidebar_notificacao, aviso = avisos.total > 0),
             DialogaMenuItem("perfil", "Perfil", iconeRes = R.drawable.ic_sidebar_perfil)
         )
     }

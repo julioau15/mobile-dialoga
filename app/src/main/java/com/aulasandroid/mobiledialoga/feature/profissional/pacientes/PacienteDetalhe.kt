@@ -146,7 +146,7 @@ private fun CabecalhoPaciente(
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
             Row(verticalAlignment = Alignment.Top) {
-                AvatarIniciais(paciente.nome, tamanho = 56.dp)
+                AvatarIniciais(paciente.nome, tamanho = 56.dp, fotoUrl = paciente.foto)
                 EspacoH(14.dp)
                 Column(modifier = Modifier.weight(1f)) {
                     Text(paciente.nome, color = CorTexto, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
@@ -351,7 +351,7 @@ private fun AbaIndicadores(
             EspacoV(4.dp)
             Text(
                 "Humor, sono e aderência ao tratamento aparecem aqui depois que ${paciente.nome} autorizar o acesso. " +
-                    "Esta área ainda será liberada nesta versão do app.",
+                        "Esta área ainda será liberada nesta versão do app.",
                 color = CorSecundaria,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,

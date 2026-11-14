@@ -72,6 +72,13 @@ interface ProfissionalService {
         @Body dados: JsonObject
     ): Call<JsonObject>
 
+    // Só o profissional dono consegue excluir (o back confere)
+    @DELETE("disponibilidades/{id}")
+    fun excluirDisponibilidade(
+        @Header("x-access-token") token: String,
+        @Path("id") id: Int
+    ): Call<JsonObject>
+
     @Multipart
     @PUT("profissionais/me")
     fun atualizarPerfilProfissionalMe(

@@ -37,8 +37,21 @@ data class DialogaMenuItem(
     val id: String,
     val titulo: String,
     @param:DrawableRes val iconeRes: Int? = null,
-    val iconeVector: ImageVector? = null
+    val iconeVector: ImageVector? = null,
+    val aviso: Boolean = false // bolinha: há novidade nesta área
 )
+
+// Bolinha de aviso (roxa/vermelha) que fica no canto de um ícone
+@Composable
+private fun BolinhaAviso(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(10.dp)
+            .background(Color.White, CircleShape)
+            .padding(1.5.dp)
+            .background(Color(0xFFE5484D), CircleShape)
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -163,6 +176,9 @@ fun DialogaLayout(
                                         fontWeight = if (selecionado) FontWeight.SemiBold else FontWeight.Medium
                                     )
                                 },
+                                badge = {
+                                    if (item.aviso) BolinhaAviso()
+                                },
                                 icon = {
                                     if (item.iconeRes != null) {
                                         Icon(
@@ -246,20 +262,30 @@ fun DialogaLayout(
                         },
                         navigationIcon = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(
-                                    imageVector = Icons.Default.Menu,
-                                    contentDescription = "Abrir menu",
-                                    tint = CorPrimaria
-                                )
+                                Box {
+                                    Icon(
+                                        imageVector = Icons.Default.Menu,
+                                        contentDescription = "Abrir menu",
+                                        tint = CorPrimaria
+                                    )
+                                    if (itensMenu.any { it.aviso }) {
+                                        BolinhaAviso(Modifier.align(Alignment.TopEnd))
+                                    }
+                                }
                             }
                         },
                         actions = {
                             IconButton(onClick = { onSelecionarItem("notificacoes") }) {
-                                Icon(
-                                    imageVector = Icons.Default.Notifications,
-                                    contentDescription = "Notificações",
-                                    tint = CorPrimaria
-                                )
+                                Box {
+                                    Icon(
+                                        imageVector = Icons.Default.Notifications,
+                                        contentDescription = "Notificações",
+                                        tint = CorPrimaria
+                                    )
+                                    if (itensMenu.any { it.id == "notificacoes" && it.aviso }) {
+                                        BolinhaAviso(Modifier.align(Alignment.TopEnd))
+                                    }
+                                }
                             }
                         },
                         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(

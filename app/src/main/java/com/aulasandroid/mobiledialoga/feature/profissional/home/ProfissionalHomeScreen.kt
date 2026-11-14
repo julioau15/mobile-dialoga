@@ -99,7 +99,7 @@ fun ProfissionalHomeScreen(
     }
 
     val primeiroNome = authState.userProfile?.getNomeExibicao()
-        ?.trim()?.substringBefore(" ").orEmpty().ifBlank { "Profissional" }
+        ?.trim().orEmpty().ifBlank { "Profissional" }
 
     val enviadas = tarefas.enviadas
     val pendentesResposta = enviadas.sumOf { t ->

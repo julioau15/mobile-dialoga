@@ -132,7 +132,7 @@ fun ConsultasPacienteScreen(
             profissionais = estado.profissionais,
             salvando = estado.salvando,
             onProfissionalTexto = viewModel::onProfissionalTextoChange,
-            onProfissionalEscolhido = viewModel::onProfissionalEscolhido,
+            onProfissionalEscolhido = { viewModel.onProfissionalEscolhido(it, token) },
             onEspecialidade = viewModel::onEspecialidadeChange,
             onData = viewModel::onDataChange,
             onHora = viewModel::onHoraChange,

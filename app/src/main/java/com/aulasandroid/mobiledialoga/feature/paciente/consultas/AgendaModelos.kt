@@ -111,8 +111,22 @@ data class Consulta(
 data class ProfissionalVinculado(
     val idVinculo: Int,
     val idProfissional: Int,
-    val nome: String
+    val nome: String,
+    val especialidades: List<String> = emptyList() // as do cadastro do profissional: o paciente escolhe entre elas
 )
+
+// Um dia em que o profissional atende e ainda tem horário livre
+data class DiaLivre(val dia: Dia, val horarios: List<String>)
+
+// Dias e horários livres do profissional de um vínculo (resposta de GET /consultas/vinculos/{id}/horarios)
+data class HorariosDoProfissional(
+    val especialidades: List<String>,
+    val dias: List<DiaLivre>,
+    val cadastrouDisponibilidade: Boolean
+) {
+    val diasLivres: Set<Dia> get() = dias.map { it.dia }.toSet()
+    fun horariosDo(dia: Dia?): List<String> = dias.firstOrNull { it.dia == dia }?.horarios.orEmpty()
+}
 
 // Vínculo do paciente como a API devolve
 data class VinculoDoPaciente(

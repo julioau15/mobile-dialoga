@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.delay
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aulasandroid.mobiledialoga.R
 import com.aulasandroid.mobiledialoga.components.DialogaLayout
@@ -43,20 +44,30 @@ fun PacienteScreen(onLogout: () -> Unit) {
         authState.carregarPerfilMeu()
     }
 
+    // Atualiza as bolinhas ao trocar de tela e a cada 30 segundos
+    LaunchedEffect(subRotaAtual) { authState.verificarNovasNotificacoes() }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            authState.verificarNovasNotificacoes()
+        }
+    }
+
+    val avisos = authState.avisos
     val profile = authState.userProfile
     val nomeExibicao = profile?.getNomeExibicao() ?: "Paciente"
     val iniciais = profile?.getIniciais() ?: "PA"
     val fotoUrl = profile?.getFotoUrlCompleta()
 
-    val itensMenu = remember {
+    val itensMenu = remember(avisos) {
         listOf(
             DialogaMenuItem("dashboard", "Dashboard", iconeRes = R.drawable.ic_sidebar_dashboard),
             DialogaMenuItem("relatorios", "Relatórios", iconeRes = R.drawable.ic_sidebar_relatorios),
             DialogaMenuItem("tratamento", "Tratamentos", iconeRes = R.drawable.ic_sidebar_tratamentos),
-            DialogaMenuItem("agenda", "Agenda", iconeRes = R.drawable.ic_sidebar_agenda),
+            DialogaMenuItem("agenda", "Agenda", iconeRes = R.drawable.ic_sidebar_agenda, aviso = avisos.agenda),
             DialogaMenuItem("profissionais", "Profissionais", iconeRes = R.drawable.ic_sidebar_profissionais),
-            DialogaMenuItem("tarefas", "Tarefas", iconeRes = R.drawable.ic_sidebar_tarefas),
-            DialogaMenuItem("notificacoes", "Notificações", iconeRes = R.drawable.ic_sidebar_notificacao),
+            DialogaMenuItem("tarefas", "Tarefas", iconeRes = R.drawable.ic_sidebar_tarefas, aviso = avisos.tarefas),
+            DialogaMenuItem("notificacoes", "Notificações", iconeRes = R.drawable.ic_sidebar_notificacao, aviso = avisos.total > 0),
             DialogaMenuItem("perfil", "Perfil", iconeRes = R.drawable.ic_sidebar_perfil)
         )
     }

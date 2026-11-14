@@ -11,6 +11,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import com.aulasandroid.mobiledialoga.components.MascaraCrp
+import com.aulasandroid.mobiledialoga.feature.auth.login.GoogleSignIn
 import com.aulasandroid.mobiledialoga.data.remote.RetrofitFactory
 import com.aulasandroid.mobiledialoga.feature.primeiroacesso.components.PessoaSugestao
 import com.aulasandroid.mobiledialoga.model.UserProfile
@@ -19,7 +20,9 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val TAG = "AuthState"
@@ -33,6 +36,9 @@ private const val PREF_PRIMEIRO_ACESSO = "user_primeiro_acesso"
 
 data class Auth(val token: String, val nivel: String)
 
+// Onde há notificação não lida (a bolinha no menu): agenda = categorias 1 e 2, tarefas = categoria 3
+data class AvisosNaoLidos(val total: Int = 0, val agenda: Boolean = false, val tarefas: Boolean = false)
+
 class AuthException(message: String, val codigo: String?) : Exception(message)
 
 class AuthState(private val context: Context) {
@@ -40,6 +46,9 @@ class AuthState(private val context: Context) {
         private set
 
     var userProfile by mutableStateOf(carregarPerfilLocal())
+        private set
+
+    var avisos by mutableStateOf(AvisosNaoLidos())
         private set
 
     suspend fun login(email: String, senha: String): Auth {
@@ -157,41 +166,61 @@ class AuthState(private val context: Context) {
 
     suspend fun verificarNovasNotificacoes() {
         val tokenAtual = auth?.token ?: return
-        withContext(Dispatchers.IO) {
+        val novosAvisos = withContext(Dispatchers.IO) {
             try {
                 val resp = RetrofitFactory().getNotificacaoService().listarNotificacoes(tokenAtual).execute()
-                if (resp.isSuccessful) {
-                    val json = resp.body()
-                    val array = findArray(json, "notificacao", "notificacoes", "response", "dados")
-                    val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                    val idsVistos = prefs.getStringSet("ids_notificacoes_vistas", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+                // o back responde 404 quando não há nenhuma notificação: então não há nada não lido
+                if (resp.code() == 404) return@withContext AvisosNaoLidos()
+                if (!resp.isSuccessful) return@withContext null
 
-                    for (elem in array) {
-                        try {
-                            if (!elem.isJsonObject) continue
-                            val obj = elem.asJsonObject
-                            val id = obj.get("id")?.asInt ?: continue
-                            val lida = obj.get("lida")?.let { if (it.isJsonPrimitive) it.asInt == 1 || it.asBoolean else false } ?: false
-                            val titulo = obj.get("titulo_mensagem")?.asString ?: "Aviso do Dialoga"
+                val json = resp.body()
+                val array = findArray(json, "notificacao", "notificacoes", "response", "dados")
+                val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                val idsVistos = prefs.getStringSet("ids_notificacoes_vistas", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
 
-                            if (!lida && !idsVistos.contains(id.toString())) {
-                                val mostrou = withContext(Dispatchers.Main) {
-                                    com.aulasandroid.mobiledialoga.core.notification.NotificationHelper.mostrarNotificacao(
-                                        context,
-                                        "Dialoga",
-                                        titulo,
-                                        id
-                                    )
-                                }
-                                if (mostrou) idsVistos.add(id.toString())
+                var total = 0
+                var agenda = false
+                var tarefas = false
+
+                for (elem in array) {
+                    try {
+                        if (!elem.isJsonObject) continue
+                        val obj = elem.asJsonObject
+                        val id = obj.get("id")?.asInt ?: continue
+                        val lida = obj.get("lida")?.let { if (it.isJsonPrimitive) it.asInt == 1 || it.asBoolean else false } ?: false
+                        val titulo = obj.get("titulo_mensagem")?.asString ?: "Aviso do Dialoga"
+                        val categoria = obj.get("id_categoria")?.let { if (it.isJsonPrimitive) it.asInt else 0 } ?: 0
+
+                        if (!lida) {
+                            total++
+                            if (categoria == 1 || categoria == 2) agenda = true
+                            if (categoria == 3) tarefas = true
+                        }
+
+                        if (!lida && !idsVistos.contains(id.toString())) {
+                            val mostrou = withContext(Dispatchers.Main) {
+                                com.aulasandroid.mobiledialoga.core.notification.NotificationHelper.mostrarNotificacao(
+                                    context,
+                                    "Dialoga",
+                                    titulo,
+                                    id
+                                )
                             }
-                        } catch (_: Exception) { }
-                    }
-
-                    prefs.edit().putStringSet("ids_notificacoes_vistas", idsVistos).apply()
+                            if (mostrou) idsVistos.add(id.toString())
+                        }
+                    } catch (_: Exception) { }
                 }
-            } catch (_: Exception) { }
+
+                prefs.edit().putStringSet("ids_notificacoes_vistas", idsVistos).apply()
+                AvisosNaoLidos(total, agenda, tarefas)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
         }
+        // null = não conseguiu consultar (sem rede): mantém o que já estava na tela
+        if (novosAvisos != null) withContext(Dispatchers.Main) { avisos = novosAvisos }
     }
 
     private fun extrairCrp(element: JsonElement?): String? {
@@ -459,6 +488,10 @@ class AuthState(private val context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().clear().apply()
         auth = null
         userProfile = null
+        avisos = AvisosNaoLidos()
+
+        // Esquece a conta Google usada, para o próximo "Entrar com Google" abrir o seletor de contas de novo
+        CoroutineScope(Dispatchers.IO).launch { GoogleSignIn.limparSessao(context) }
     }
 
     private fun carregar(): Auth? {

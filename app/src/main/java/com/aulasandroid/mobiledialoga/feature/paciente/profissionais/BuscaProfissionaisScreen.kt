@@ -259,7 +259,7 @@ private fun CartaoProfissional(
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.Top) {
-            AvatarIniciais(p.nome, tamanho = 48.dp)
+            AvatarIniciais(p.nome, tamanho = 48.dp, fotoUrl = p.foto)
             EspacoH(14.dp)
             Column(modifier = Modifier.weight(1f)) {
                 Text(

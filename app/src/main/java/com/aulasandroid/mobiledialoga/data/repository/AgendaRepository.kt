@@ -7,6 +7,7 @@ import com.aulasandroid.mobiledialoga.feature.paciente.consultas.AgendaRegras
 import com.aulasandroid.mobiledialoga.feature.paciente.consultas.Consulta
 import com.aulasandroid.mobiledialoga.feature.paciente.consultas.DadosAgenda
 import com.aulasandroid.mobiledialoga.feature.paciente.consultas.Dia
+import com.aulasandroid.mobiledialoga.feature.paciente.consultas.HorariosDoProfissional
 import com.aulasandroid.mobiledialoga.feature.paciente.consultas.ProfissionalVinculado
 import com.google.gson.JsonObject
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +39,7 @@ class AgendaRepository(
             val profissionais = async { executar(servico.getProfissionais(t), vazioEm404 = true) }
             val consultas = async { executar(servico.getConsultas(t), vazioEm404 = true) }
 
+            val profissionaisJson = profissionais.await()
             val idPaciente = AgendaJson.idDoPaciente(paciente.await())
                 ?: throw AgendaException("Não foi possível identificar o seu cadastro de paciente.")
 
@@ -46,10 +48,13 @@ class AgendaRepository(
 
             DadosAgenda(
                 consultas = AgendaJson.consultasDosVinculos(AgendaJson.consultas(consultas.await()), idsVinculos),
-                profissionais = AgendaRegras.profissionaisVinculados(
-                    meusVinculos,
-                    AgendaJson.nomesDosProfissionais(profissionais.await())
-                ),
+                profissionais = profissionaisJson.let { json ->
+                    AgendaRegras.profissionaisVinculados(
+                        meusVinculos,
+                        AgendaJson.nomesDosProfissionais(json),
+                        AgendaJson.especialidadesDosProfissionais(json)
+                    )
+                },
                 idsVinculos = idsVinculos
             )
         }
@@ -60,6 +65,13 @@ class AgendaRepository(
         withContext(Dispatchers.IO) {
             val resposta = executar(servico.getConsultas(limpar(token)), vazioEm404 = true)
             AgendaJson.consultasDosVinculos(AgendaJson.consultas(resposta), idsVinculos)
+        }
+
+    // Dias e horários em que o profissional deste vínculo atende e ainda está livre
+    suspend fun horarios(token: String, idVinculo: Int): HorariosDoProfissional =
+        withContext(Dispatchers.IO) {
+            val resposta = executar(servico.getHorarios(limpar(token), idVinculo))
+            AgendaJson.horarios(resposta) ?: throw AgendaException(ERRO_PADRAO)
         }
 
     // Agenda a consulta no vínculo do profissional escolhido
