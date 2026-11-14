@@ -2,8 +2,6 @@ package com.aulasandroid.mobiledialoga.feature.auth.login
 
 import android.content.Context
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.GetCredentialException
-import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -12,6 +10,7 @@ import com.aulasandroid.mobiledialoga.core.error.ErrorTranslator
 import com.aulasandroid.mobiledialoga.core.validation.EmailValidator
 import com.aulasandroid.mobiledialoga.data.AuthException
 import com.aulasandroid.mobiledialoga.data.AuthState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 
@@ -78,50 +77,88 @@ class LoginViewModel : ViewModel() {
         authState: AuthState,
         onLoginSuccess: (String) -> Unit,
         onProfissionalEmAnalise: () -> Unit,
-        onCadastrarComGoogle: (String, String, String?) -> Unit
+        onCadastrarComGoogle: (String, String, String?, String?) -> Unit
     ) {
         if (estado.isLoading || estado.isGoogleLoading) return
         viewModelScope.launch {
             _uiState.value = estado.copy(isGoogleLoading = true, erroGeral = null)
-            try {
-                val googleData = GoogleSignIn.obterDadosGoogle(context)
-                val auth = try {
-                    authState.loginGoogle(googleData.idGoogle, googleData.email)
-                } catch (e: AuthException) {
-                    _uiState.value = estado.copy(isGoogleLoading = false)
-                    val msg = (e.message ?: "").lowercase()
-                    when {
-                        // a conta Google ainda não tem cadastro: segue para o cadastro com os dados dela
-                        e.codigo == "USUARIO_NAO_ENCONTRADO" || msg.contains("não cadastrado") ->
-                            onCadastrarComGoogle(googleData.idGoogle, googleData.email, googleData.nome)
-                        e.codigo == "PROFISSIONAL_EM_ANALISE" || e.codigo == "PROFISSIONAL_RECUSADO" ->
-                            onProfissionalEmAnalise()
-                        // qualquer outro erro do servidor é erro mesmo: não manda para o cadastro
-                        else -> _uiState.value = estado.copy(
-                            isGoogleLoading = false,
-                            erroGeral = ErrorTranslator.traduzirLogin(e.message)
-                        )
-                    }
-                    return@launch
-                }
-                _uiState.value = estado.copy(isGoogleLoading = false)
-                onLoginSuccess(auth.nivel)
+            val googleData = try {
+                GoogleSignIn.obterDadosGoogle(context)
             } catch (e: GetCredentialCancellationException) {
-                // a pessoa fechou o seletor de contas: não é erro
                 _uiState.value = estado.copy(isGoogleLoading = false)
-            } catch (e: NoCredentialException) {
-                _uiState.value = estado.copy(
-                    isGoogleLoading = false,
-                    erroGeral = "Nenhuma conta Google encontrada neste aparelho. Adicione uma conta e tente novamente."
-                )
-            } catch (e: GetCredentialException) {
-                _uiState.value = estado.copy(isGoogleLoading = false, erroGeral = "Não foi possível entrar com o Google.")
+                return@launch
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _uiState.value = estado.copy(
-                    isGoogleLoading = false,
-                    erroGeral = ErrorTranslator.traduzirLogin(e.message)
-                )
+                _uiState.value = estado.copy(isGoogleLoading = false, escolherContaDoAparelho = true)
+                return@launch
             }
+            concluirLoginGoogle(googleData, authState, onLoginSuccess, onProfissionalEmAnalise, onCadastrarComGoogle)
+        }
+    }
+
+    fun seletorDeContasAberto() {
+        _uiState.value = estado.copy(escolherContaDoAparelho = false)
+    }
+
+    fun contaDoAparelhoEscolhida(
+        email: String?,
+        authState: AuthState,
+        onLoginSuccess: (String) -> Unit,
+        onProfissionalEmAnalise: () -> Unit,
+        onCadastrarComGoogle: (String, String, String?, String?) -> Unit
+    ) {
+        if (email.isNullOrBlank()) {
+            _uiState.value = estado.copy(isGoogleLoading = false, escolherContaDoAparelho = false)
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = estado.copy(isGoogleLoading = true, erroGeral = null, escolherContaDoAparelho = false)
+            concluirLoginGoogle(
+                GoogleSignIn.dadosDaContaDoAparelho(email),
+                authState, onLoginSuccess, onProfissionalEmAnalise, onCadastrarComGoogle
+            )
+        }
+    }
+
+    private suspend fun concluirLoginGoogle(
+        googleData: GoogleUserData,
+        authState: AuthState,
+        onLoginSuccess: (String) -> Unit,
+        onProfissionalEmAnalise: () -> Unit,
+        onCadastrarComGoogle: (String, String, String?, String?) -> Unit
+    ) {
+        try {
+            val auth = try {
+                authState.loginGoogle(googleData.idGoogle, googleData.email)
+            } catch (e: AuthException) {
+                val msg = (e.message ?: "").lowercase()
+                val emAnalise = e.codigo == "PROFISSIONAL_EM_ANALISE" || e.codigo == "PROFISSIONAL_RECUSADO" ||
+                    msg.contains("análise") || msg.contains("analise")
+                val semCadastro = e.codigo == "USUARIO_NAO_ENCONTRADO" ||
+                    msg.contains("não cadastrado") || msg.contains("nao cadastrado") ||
+                    msg.contains("não encontrado") || msg.contains("nao encontrado")
+
+                _uiState.value = estado.copy(isGoogleLoading = false)
+                when {
+                    emAnalise -> onProfissionalEmAnalise()
+                    semCadastro -> onCadastrarComGoogle(googleData.idGoogle, googleData.email, googleData.nome, googleData.fotoUrl)
+                    else -> _uiState.value = estado.copy(
+                        isGoogleLoading = false,
+                        erroGeral = ErrorTranslator.traduzirLogin(e.message)
+                    )
+                }
+                return
+            }
+            _uiState.value = estado.copy(isGoogleLoading = false)
+            onLoginSuccess(auth.nivel)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _uiState.value = estado.copy(
+                isGoogleLoading = false,
+                erroGeral = ErrorTranslator.traduzirLogin(e.message)
+            )
         }
     }
 }

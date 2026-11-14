@@ -24,7 +24,8 @@ interface PacienteService {
         @Part("email") email: RequestBody,
         @Part("celular") celular: RequestBody,
         @Part("senha") senha: RequestBody,
-        @Part("id_google") idGoogle: RequestBody? = null
+        @Part("id_google") idGoogle: RequestBody? = null,
+        @Part("foto_avatar") fotoAvatar: RequestBody? = null
     ): Call<JsonObject>
 
     @GET("pacientes/me")

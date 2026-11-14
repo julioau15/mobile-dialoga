@@ -7,5 +7,7 @@ data class LoginUiState(
     val erroSenha: String? = null,
     val isLoading: Boolean = false,
     val isGoogleLoading: Boolean = false,
-    val erroGeral: String? = null
+    val erroGeral: String? = null,
+    // true = o Credential Manager não funcionou: a tela abre o seletor de contas do aparelho
+    val escolherContaDoAparelho: Boolean = false
 )

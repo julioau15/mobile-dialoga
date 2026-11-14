@@ -29,6 +29,7 @@ data class CadastroUiState(
     val senha: String = "",
     val confirmacao: String = "",
     val idGoogle: String? = null,
+    val fotoUrl: String? = null,
     val erroNome: String? = null,
     val erroEmail: String? = null,
     val erroCelular: String? = null,

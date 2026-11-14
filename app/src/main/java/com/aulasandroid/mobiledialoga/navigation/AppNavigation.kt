@@ -127,8 +127,9 @@ private fun AppNavigationConteudo() {
             onEsqueciSenha = { rota = Rota.RECUPERAR_SENHA },
             onLoginSuccess = { /* O redirecionamento é automático pelo estado do authState */ },
             onProfissionalEmAnalise = { rota = Rota.EM_ANALISE },
-            onCadastrarComGoogle = { idGoogle, email, nome ->
-                cadastroViewModel.preencherDadosGoogle(idGoogle, email, nome)
+            onCadastrarComGoogle = { idGoogle, email, nome, fotoUrl ->
+                authState.logout()
+                cadastroViewModel.preencherDadosGoogle(idGoogle, email, nome, fotoUrl)
                 rota = Rota.CADASTRO
             }
         )

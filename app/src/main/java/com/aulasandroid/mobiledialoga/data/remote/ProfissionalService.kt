@@ -29,7 +29,7 @@ interface ProfissionalService {
         @Part("instituicao_clinica") instituicao: RequestBody?,
         @Part("id_especialidade") idEspecialidade: RequestBody,
         @Part("id_google") idGoogle: RequestBody? = null,
-        @Part fotoAvatar: MultipartBody.Part? = null
+        @Part("foto_avatar") fotoAvatar: RequestBody? = null
     ): Call<JsonObject>
 
     @GET("profissionais/me")
@@ -38,17 +38,8 @@ interface ProfissionalService {
     @POST("profissionais/me/primeiro-acesso")
     fun concluirPrimeiroAcesso(@Header("x-access-token") token: String): Call<JsonObject>
 
-    @GET("profissionais/busca")
-    fun buscarProfissionais(
-        @Header("x-access-token") token: String?,
-        @Query("q") query: String
-    ): Call<JsonObject>
-
     @GET("profissionais/me/pacientes")
-    fun listarPacientesVinculados(
-        @Header("x-access-token") token: String,
-        @Query("nome") nome: String? = null
-    ): Call<JsonObject>
+    fun listarPacientesVinculados(@Header("x-access-token") token: String): Call<JsonObject>
 
     @POST("profissionais/me/pacientes/{id}")
     fun vincularPaciente(
@@ -56,44 +47,53 @@ interface ProfissionalService {
         @Path("id") idPaciente: String
     ): Call<JsonObject>
 
-    @DELETE("profissionais/me/pacientes/{id}")
-    fun desvincularPaciente(
-        @Header("x-access-token") token: String,
-        @Path("id") idPaciente: String
-    ): Call<JsonObject>
+    @GET("profissionais/me/consultas")
+    fun getMinhasConsultas(@Header("x-access-token") token: String): Call<JsonObject>
 
     @GET("profissionais/me/disponibilidades")
     fun listarDisponibilidadesMe(@Header("x-access-token") token: String): Call<JsonObject>
 
-    @Headers("Content-Type: application/json")
     @POST("profissionais/me/disponibilidades")
     fun criarDisponibilidadeMe(
         @Header("x-access-token") token: String,
-        @Body dados: JsonObject
+        @Body corpo: JsonObject
     ): Call<JsonObject>
 
-    // Só o profissional dono consegue excluir (o back confere)
-    @DELETE("disponibilidades/{id}")
+    @DELETE("profissionais/me/disponibilidades/{id}")
     fun excluirDisponibilidade(
         @Header("x-access-token") token: String,
         @Path("id") id: Int
+    ): Call<JsonObject>
+
+    @GET("especialidades")
+    fun listarEspecialidades(): Call<JsonObject>
+
+    @GET("profissionais/busca")
+    fun buscarProfissionais(
+        @Header("x-access-token") token: String?,
+        @Query("q") query: String
+    ): Call<JsonObject>
+
+    @GET("pacientes/busca")
+    fun buscarPacientes(
+        @Header("x-access-token") token: String?,
+        @Query("busca") busca: String
     ): Call<JsonObject>
 
     @Multipart
     @PUT("profissionais/me")
     fun atualizarPerfilProfissionalMe(
         @Header("x-access-token") token: String,
-        @Part("nome_completo") nome: RequestBody?,
-        @Part("celular") celular: RequestBody?,
-        @Part("id_especialidade") idEspecialidade: RequestBody?,
+        @Part("nome_completo") nome: RequestBody,
+        @Part("instituicao_clinica") instituicao: RequestBody? = null,
+        @Part("celular") celular: RequestBody,
+        @Part("id_especialidade") idEspecialidade: RequestBody? = null,
         @Part fotoAvatar: MultipartBody.Part? = null
     ): Call<JsonObject>
 
-    // Consultas dos pacientes vinculados ao profissional logado (traz paciente_nome e id_paciente).
-    // O back responde 404 quando não há nenhuma. Opcional: data = yyyy-MM-dd.
-    @GET("profissionais/me/consultas")
-    fun getMinhasConsultas(
+    @DELETE("profissionais/me/pacientes/{id}")
+    fun desvincularPaciente(
         @Header("x-access-token") token: String,
-        @Query("data") data: String? = null
+        @Path("id") idPaciente: String
     ): Call<JsonObject>
 }

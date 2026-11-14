@@ -40,7 +40,7 @@ fun LoginScreen(
     onEsqueciSenha: () -> Unit,
     onLoginSuccess: (String) -> Unit,
     onProfissionalEmAnalise: () -> Unit,
-    onCadastrarComGoogle: (String, String, String?) -> Unit,
+    onCadastrarComGoogle: (String, String, String?, String?) -> Unit,
     viewModel: LoginViewModel = viewModel()
 ) {
     val estado by viewModel.uiState.observeAsState(LoginUiState())
@@ -114,6 +114,6 @@ fun LoginScreen(
 @Composable
 fun LoginScreenPreview() {
     MobileDialogaTheme {
-        LoginScreen(onCadastrar = {}, onEsqueciSenha = {}, onLoginSuccess = {}, onProfissionalEmAnalise = {}, onCadastrarComGoogle = { _, _, _ -> })
+        LoginScreen(onCadastrar = {}, onEsqueciSenha = {}, onLoginSuccess = {}, onProfissionalEmAnalise = {}, onCadastrarComGoogle = { _, _, _, _ -> })
     }
 }
