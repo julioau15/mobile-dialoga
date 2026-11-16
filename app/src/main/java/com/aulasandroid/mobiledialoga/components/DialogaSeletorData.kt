@@ -27,7 +27,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.SelectableDates
 import com.aulasandroid.mobiledialoga.feature.paciente.consultas.Dia
+import com.aulasandroid.mobiledialoga.feature.profissional.disponibilidade.DisponibilidadeUi
+import com.aulasandroid.mobiledialoga.feature.profissional.disponibilidade.temDisponibilidade
 import com.aulasandroid.mobiledialoga.ui.theme.CorBranco
 import com.aulasandroid.mobiledialoga.ui.theme.CorErro
 import com.aulasandroid.mobiledialoga.ui.theme.CorPrimaria
@@ -38,6 +41,15 @@ import java.util.Locale
 private const val MILISSEGUNDOS_POR_DIA = 86_400_000L
 private const val ANOS_A_FRENTE = 5
 private const val ANOS_ATRAS_NASCIMENTO = 130
+
+private fun primeiroDiaDisponivel(hoje: Dia, disponibilidades: List<DisponibilidadeUi>): Dia? {
+    var d = hoje
+    repeat(365) {
+        if (temDisponibilidade(d, disponibilidades)) return d
+        d = d.maisDias(1)
+    }
+    return null
+}
 
 // Tema claro do app para o calendário (o app usa cores claras fixas, mesmo com o celular em modo escuro).
 // É o mesmo esquema usado no seletor de data da agenda do paciente.
@@ -89,6 +101,8 @@ fun nascimentoDiaValido(dia: Dia): Boolean {
  *
  * - [prazoIso]: valor atual (null = vazio)
  * - [onPrazoChange]: devolve a data escolhida em ISO, ou null se a escolhida for inválida (ex.: no passado)
+ * - [disponibilidades]: quando fornecido (ex.: profissional criando consulta), restringe as datas apenas
+ *   às que possuem disponibilidade cadastrada.
  */
 @Composable
 fun CampoDataCalendario(
@@ -99,7 +113,8 @@ fun CampoDataCalendario(
     placeholder: String = "dd/mm/aaaa",
     erro: String? = null,
     enabled: Boolean = true,
-    dataNascimento: Boolean = false // true = aceita datas passadas (e não futuras), em vez de prazos futuros
+    dataNascimento: Boolean = false, // true = aceita datas passadas (e não futuras), em vez de prazos futuros
+    disponibilidades: List<DisponibilidadeUi>? = null
 ) {
     var mostrarCalendario by remember { mutableStateOf(false) }
     var erroLocal by remember { mutableStateOf<String?>(null) }
@@ -150,13 +165,26 @@ fun CampoDataCalendario(
     if (mostrarCalendario) {
         SeletorDataCalendario(
             inicial = dia,
+            disponibilidades = disponibilidades,
             onConfirmar = { escolhido ->
-                val valido = if (dataNascimento) nascimentoDiaValido(escolhido) else prazoDiaValido(escolhido)
+                val valido = if (dataNascimento) {
+                    nascimentoDiaValido(escolhido)
+                } else if (disponibilidades != null) {
+                    escolhido >= Dia.hoje() && (disponibilidades.isEmpty() || temDisponibilidade(escolhido, disponibilidades))
+                } else {
+                    prazoDiaValido(escolhido)
+                }
                 if (valido) {
                     erroLocal = null
                     onPrazoChange(diaParaIso(escolhido))
                 } else {
-                    erroLocal = if (dataNascimento) "Escolha uma data de nascimento válida." else "Escolha uma data a partir de hoje."
+                    erroLocal = if (dataNascimento) {
+                        "Escolha uma data de nascimento válida."
+                    } else if (disponibilidades != null) {
+                        "Escolha um dia em que você tenha disponibilidade."
+                    } else {
+                        "Escolha uma data a partir de hoje."
+                    }
                     onPrazoChange(null)
                 }
             },
@@ -171,16 +199,37 @@ fun CampoDataCalendario(
 @Composable
 private fun SeletorDataCalendario(
     inicial: Dia?,
+    disponibilidades: List<DisponibilidadeUi>? = null,
     onConfirmar: (Dia) -> Unit,
     dataNascimento: Boolean,
     onFechar: () -> Unit
 ) {
-    val hoje = Dia.hoje()
-    val padrao = if (dataNascimento) Dia(hoje.ano - 25, 1, 1) else hoje
+    val hoje = remember { Dia.hoje() }
+    val primeiroDisponivel = remember(hoje, disponibilidades) {
+        if (disponibilidades != null && disponibilidades.isNotEmpty()) {
+            primeiroDiaDisponivel(hoje, disponibilidades)
+        } else null
+    }
+    val padrao = if (dataNascimento) Dia(hoje.ano - 25, 1, 1) else (primeiroDisponivel ?: hoje)
     val faixaAnos = if (dataNascimento) (hoje.ano - ANOS_ATRAS_NASCIMENTO)..hoje.ano else hoje.ano..(hoje.ano + ANOS_A_FRENTE)
     val estado = rememberDatePickerState(
         initialSelectedDateMillis = (inicial ?: padrao).let { it.diasDesdeEpoca() * MILISSEGUNDOS_POR_DIA },
-        yearRange = faixaAnos
+        yearRange = faixaAnos,
+        selectableDates = remember(disponibilidades, dataNascimento, inicial) {
+            object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    val d = Dia.deEpoca(Math.floorDiv(utcTimeMillis, MILISSEGUNDOS_POR_DIA))
+                    if (dataNascimento) return nascimentoDiaValido(d)
+                    if (disponibilidades != null) {
+                        if (inicial != null && d == inicial) return true
+                        return d >= hoje && (disponibilidades.isEmpty() || temDisponibilidade(d, disponibilidades))
+                    }
+                    return prazoDiaValido(d)
+                }
+
+                override fun isSelectableYear(year: Int): Boolean = year in faixaAnos
+            }
+        }
     )
     MaterialTheme(colorScheme = EsquemaClaroSeletor) {
         DatePickerDialog(

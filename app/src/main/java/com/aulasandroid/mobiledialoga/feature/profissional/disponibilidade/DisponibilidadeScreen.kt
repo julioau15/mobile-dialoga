@@ -1,6 +1,35 @@
 package com.aulasandroid.mobiledialoga.feature.profissional.disponibilidade
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import com.aulasandroid.mobiledialoga.feature.paciente.consultas.Dia
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.CalendarioAgendaProfissional
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.CardMensagemAgenda
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.ChipStatus
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.CorChipAmareloFundo
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.CorChipAmareloTexto
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.CorChipVerdeFundo
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.CorChipVerdeTexto
+import com.aulasandroid.mobiledialoga.ui.theme.CorBordaCard
+import com.aulasandroid.mobiledialoga.ui.theme.CorBranco
+import com.aulasandroid.mobiledialoga.ui.theme.CorPrimaria
+import com.aulasandroid.mobiledialoga.ui.theme.CorPrimariaClara
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -42,6 +71,7 @@ import com.aulasandroid.mobiledialoga.feature.vinculos.components.txt
 import com.aulasandroid.mobiledialoga.ui.theme.CorErro
 import com.aulasandroid.mobiledialoga.ui.theme.CorSecundaria
 import com.aulasandroid.mobiledialoga.ui.theme.CorTexto
+import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import kotlinx.coroutines.CancellationException
@@ -93,17 +123,26 @@ class DisponibilidadeViewModel : ViewModel() {
     var state by mutableStateOf(DisponibilidadeState())
         private set
 
-    private class Resp(val conectou: Boolean, val codigo: Int, val corpo: JsonObject?) {
+    private class Resp(val conectou: Boolean, val codigo: Int, val corpo: JsonObject?, val mensagem: String?) {
         val ok: Boolean get() = conectou && codigo in 200..299
     }
 
     private suspend fun chamar(bloco: () -> Call<JsonObject>): Resp = try {
         val r = bloco().awaitResponse()
-        Resp(true, r.code(), if (r.isSuccessful) r.body() else null)
+        val mensagem = if (r.isSuccessful) null else try {
+            val texto = r.errorBody()?.string()
+            val json = Gson().fromJson(texto, JsonObject::class.java)
+            val msg = json?.get("message")?.takeIf { it.isJsonPrimitive }?.asString
+            val campo = json?.get("field")?.takeIf { it.isJsonPrimitive }?.asString
+            if (!msg.isNullOrBlank()) msg else campo
+        } catch (_: Exception) {
+            null
+        }
+        Resp(true, r.code(), if (r.isSuccessful) r.body() else null, mensagem)
     } catch (e: CancellationException) {
         throw e
-    } catch (e: Exception) {
-        Resp(false, 0, null)
+    } catch (_: Exception) {
+        Resp(false, 0, null, null)
     }
 
     fun limparAviso() {
@@ -116,7 +155,7 @@ class DisponibilidadeViewModel : ViewModel() {
             val resp = chamar { RetrofitFactory().getProfissionalService().listarDisponibilidadesMe(token) }
             // 404 = ainda não cadastrou nenhum horário: não é erro
             if (!resp.conectou || (resp.codigo !in 200..299 && resp.codigo != 404)) {
-                state = state.copy(carregando = false, erro = mensagemErroHttp(resp.codigo, !resp.conectou, "carregar seus horários"))
+                state = state.copy(carregando = false, erro = resp.mensagem ?: mensagemErroHttp(resp.codigo, !resp.conectou, "carregar seus horários"))
                 return@launch
             }
             val itens = resp.corpo.listaEm("disponibilidade").mapNotNull { el ->
@@ -155,7 +194,7 @@ class DisponibilidadeViewModel : ViewModel() {
             } else {
                 state = state.copy(
                     salvando = false,
-                    aviso = mensagemErroHttp(resp.codigo, !resp.conectou, "salvar o horário"),
+                    aviso = resp.mensagem ?: mensagemErroHttp(resp.codigo, !resp.conectou, "salvar o horário"),
                     avisoErro = true
                 )
             }
@@ -173,7 +212,7 @@ class DisponibilidadeViewModel : ViewModel() {
             } else {
                 state = state.copy(
                     salvando = false,
-                    aviso = mensagemErroHttp(resp.codigo, !resp.conectou, "remover o horário"),
+                    aviso = resp.mensagem ?: mensagemErroHttp(resp.codigo, !resp.conectou, "remover o horário"),
                     avisoErro = true
                 )
             }
@@ -181,53 +220,70 @@ class DisponibilidadeViewModel : ViewModel() {
     }
 }
 
-/** Cartão "Horários de atendimento": lista, adiciona e remove. */
+/**
+ * Aba "Disponibilidade" da Agenda (protótipo): calendário com os dias em que o profissional atende (verdes) e a
+ * lista de horários, com "Adicionar" e a lixeira para remover.
+ */
 @Composable
-fun DisponibilidadeSecao(
+fun DisponibilidadeAba(
     token: String?,
-    modifier: Modifier = Modifier,
-    viewModel: DisponibilidadeViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+    viewModel: DisponibilidadeViewModel,
+    modifier: Modifier = Modifier
 ) {
     val estado = viewModel.state
     var adicionando by remember { mutableStateOf(false) }
     var excluir by remember { mutableStateOf<DisponibilidadeUi?>(null) }
+    var mesVisivel by remember { mutableStateOf(Dia.hoje()) }
+    var diaSelecionado by remember { mutableStateOf(Dia.hoje()) }
 
     LaunchedEffect(token) { if (!token.isNullOrBlank()) viewModel.carregar(token) }
 
-    DialogaCard(modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Horários de atendimento", color = CorTexto, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Text(
-                "É nestes dias e horários que seus pacientes conseguem marcar consulta (1 hora cada).",
-                color = CorSecundaria, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
-            )
+    val diasDisponiveis = remember(estado.itens, mesVisivel.ano, mesVisivel.mes) {
+        diasComDisponibilidade(estado.itens, mesVisivel.ano, mesVisivel.mes)
+    }
 
-            when {
-                estado.carregando -> Text("Carregando...", color = CorSecundaria, fontSize = 13.sp)
-                estado.erro != null -> Text(estado.erro, color = CorErro, fontSize = 13.sp)
-                estado.itens.isEmpty() -> Text(
-                    "Você ainda não cadastrou horários. Sem eles, nenhum paciente consegue marcar consulta com você.",
-                    color = CorSecundaria, fontSize = 13.sp
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp), modifier = modifier.fillMaxWidth()) {
+        CalendarioAgendaProfissional(
+            mesVisivel = mesVisivel,
+            diaSelecionado = diaSelecionado,
+            diasDisponiveis = diasDisponiveis,
+            legenda = "Dias com disponibilidade",
+            onSelecionarDia = { diaSelecionado = it },
+            onMudarMes = { mesVisivel = mesVisivel.maisMeses(it) }
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Disponibilidade semanal", color = CorTexto, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    "Horários recorrentes disponíveis para agendamentos",
+                    color = CorSecundaria, fontSize = 12.sp
                 )
-                else -> estado.itens.forEach { item ->
-                    Row(
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                    ) {
-                        Text(item.resumo, color = CorTexto, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { excluir = item }, enabled = !estado.salvando) {
-                            Text("Remover", color = CorErro, fontSize = 13.sp)
-                        }
-                    }
+            }
+            Button(
+                onClick = { viewModel.limparAviso(); adicionando = true },
+                shape = RoundedCornerShape(10.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CorPrimaria, contentColor = CorBranco),
+                modifier = Modifier.height(38.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Adicionar", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        when {
+            estado.carregando -> CardMensagemAgenda("Carregando...")
+            estado.erro != null -> CardMensagemAgenda(estado.erro)
+            estado.itens.isEmpty() -> CardMensagemAgenda(
+                "Você ainda não cadastrou horários. Sem eles, nenhum paciente consegue marcar consulta com você."
+            )
+            else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                estado.itens.forEach { item ->
+                    CardDisponibilidade(item = item, removendo = estado.salvando, onRemover = { excluir = item })
                 }
             }
-
-            estado.aviso?.let {
-                Text(it, color = if (estado.avisoErro) CorErro else CorSecundaria, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            DialogaButton(texto = "Adicionar horário", onClick = { viewModel.limparAviso(); adicionando = true })
         }
     }
 
@@ -259,6 +315,131 @@ fun DisponibilidadeSecao(
             )
         }
     }
+}
+
+// Um horário cadastrado: chip do dia ("Seg"), "08:00 – 12:00", selo (Semanal / Única vez / Período) e lixeira
+@Composable
+private fun CardDisponibilidade(item: DisponibilidadeUi, removendo: Boolean, onRemover: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = CorBranco,
+        border = BorderStroke(1.dp, CorBordaCard),
+        shadowElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 10.dp, end = 4.dp)
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .width(56.dp)
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(CorPrimariaClara)
+            ) {
+                Text(item.rotuloDoDia(), color = CorPrimaria, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("${item.inicio} – ${item.fim}", color = CorTexto, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    when (item.tipo) {
+                        "unica" -> ChipStatus("Única vez", CorChipAmareloFundo, CorChipAmareloTexto)
+                        "periodo" -> ChipStatus("Período", CorPrimariaClara, CorPrimaria)
+                        else -> ChipStatus("Semanal", CorChipVerdeFundo, CorChipVerdeTexto)
+                    }
+                    val detalhe = item.detalhe()
+                    if (detalhe.isNotEmpty()) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(detalhe, color = CorSecundaria, fontSize = 12.sp, maxLines = 2)
+                    }
+                }
+            }
+            IconButton(onClick = onRemover, enabled = !removendo) {
+                Icon(Icons.Outlined.Delete, contentDescription = "Remover horário", tint = CorSecundaria)
+            }
+        }
+    }
+}
+
+// Dia da semana no chip: "Seg"; com vários dias, o primeiro e quantos mais ("Seg +2")
+private fun DisponibilidadeUi.rotuloDoDia(): String {
+    if (tipo == "unica") {
+        return isoParaDia(dataInicial)?.let { NOMES_DIAS[it.diaDaSemana()] } ?: "—"
+    }
+    val ordenados = dias.sorted()
+    val primeiro = ordenados.firstOrNull()?.let { NOMES_DIAS.getOrNull(it - 1) } ?: "—"
+    return if (ordenados.size > 1) "$primeiro +${ordenados.size - 1}" else primeiro
+}
+
+// Texto ao lado do selo: dias (se mais de um), a data da "Única vez" ou o intervalo do "Período"
+private fun DisponibilidadeUi.detalhe(): String {
+    fun br(iso: String?) = isoParaDia(iso)?.let { diaParaBr(it) } ?: "?"
+    val diasTexto = dias.sorted().joinToString(", ") { NOMES_DIAS.getOrElse(it - 1) { "?" } }
+    return when (tipo) {
+        "unica" -> br(dataInicial)
+        "periodo" -> "$diasTexto • ${br(dataInicial)} a ${br(dataFinal)}"
+        else -> if (dias.size > 1) diasTexto else ""
+    }
+}
+
+fun temDisponibilidade(dia: Dia, item: DisponibilidadeUi): Boolean {
+    val idDoDia = dia.diaDaSemana() + 1 // 1 = Domingo ... 7 = Sábado, como no banco
+    val iso = dia.paraIso()
+    return when (item.tipo) {
+        "unica" -> item.dataInicial == iso
+        "periodo" -> idDoDia in item.dias &&
+                (item.dataInicial.isNullOrEmpty() || iso >= item.dataInicial) &&
+                (item.dataFinal.isNullOrEmpty() || iso <= item.dataFinal)
+        else -> idDoDia in item.dias &&
+                (item.dataInicial.isNullOrEmpty() || iso >= item.dataInicial) &&
+                (item.dataFinal.isNullOrEmpty() || iso <= item.dataFinal)
+    }
+}
+
+fun temDisponibilidade(dia: Dia, disponibilidades: List<DisponibilidadeUi>): Boolean =
+    disponibilidades.any { temDisponibilidade(dia, it) }
+
+fun horariosDoDia(dia: Dia, disponibilidades: List<DisponibilidadeUi>): List<String> {
+    val resultado = mutableSetOf<String>()
+    val itensDoDia = disponibilidades.filter { temDisponibilidade(dia, it) }
+    for (item in itensDoDia) {
+        val minInicio = horaParaMinutos(item.inicio) ?: continue
+        val minFim = horaParaMinutos(item.fim) ?: continue
+        var m = minInicio
+        while (m <= minFim) {
+            resultado.add(minutosParaHora(m))
+            m += 30
+        }
+    }
+    return resultado.sorted()
+}
+
+private fun horaParaMinutos(hora: String): Int? {
+    val partes = hora.split(":")
+    if (partes.size < 2) return null
+    val h = partes[0].toIntOrNull() ?: return null
+    val m = partes[1].toIntOrNull() ?: return null
+    return h * 60 + m
+}
+
+private fun minutosParaHora(minutos: Int): String {
+    val h = minutos / 60
+    val m = minutos % 60
+    return String.format(java.util.Locale.US, "%02d:%02d", h, m)
+}
+
+// Dias do mês em que o profissional atende (para pintar o calendário de verde)
+fun diasComDisponibilidade(itens: List<DisponibilidadeUi>, ano: Int, mes: Int): Set<Dia> {
+    val resultado = mutableSetOf<Dia>()
+    for (numero in 1..Dia.diasNoMes(ano, mes)) {
+        val dia = Dia(ano, mes, numero)
+        if (temDisponibilidade(dia, itens)) resultado.add(dia)
+    }
+    return resultado
 }
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)

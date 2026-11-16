@@ -2,104 +2,199 @@ package com.aulasandroid.mobiledialoga.feature.profissional.consultas
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.aulasandroid.mobiledialoga.components.DialogaCard
-import com.aulasandroid.mobiledialoga.components.diaParaBr
-import com.aulasandroid.mobiledialoga.components.isoParaDia
-import com.aulasandroid.mobiledialoga.data.remote.RetrofitFactory
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aulasandroid.mobiledialoga.data.useAuth
-import com.aulasandroid.mobiledialoga.feature.paciente.consultas.Dia
-import com.aulasandroid.mobiledialoga.feature.profissional.disponibilidade.DisponibilidadeSecao
-import com.aulasandroid.mobiledialoga.feature.vinculos.components.listaEm
-import com.aulasandroid.mobiledialoga.feature.vinculos.components.txt
+import com.aulasandroid.mobiledialoga.feature.paciente.consultas.AgendaCalendario
+import com.aulasandroid.mobiledialoga.feature.paciente.consultas.MensagemToast
+import com.aulasandroid.mobiledialoga.feature.paciente.consultas.components.ToastAgenda
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.AbasAgenda
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.CabecalhoAgendaProfissional
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.CalendarioAgendaProfissional
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.CardConsultaDoDia
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.CardMensagemAgenda
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.CardProximoAtendimento
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.DetalhesConsultaDialog
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.ExcluirConsultaDialog
+import com.aulasandroid.mobiledialoga.feature.profissional.consultas.components.FormularioConsultaDialog
+import com.aulasandroid.mobiledialoga.feature.profissional.disponibilidade.DisponibilidadeAba
+import com.aulasandroid.mobiledialoga.feature.profissional.disponibilidade.DisponibilidadeViewModel
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.CampoBusca
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.RotuloSecao
+import com.aulasandroid.mobiledialoga.ui.theme.CorErro
 import com.aulasandroid.mobiledialoga.ui.theme.CorFundo
 import com.aulasandroid.mobiledialoga.ui.theme.CorSecundaria
-import com.aulasandroid.mobiledialoga.ui.theme.CorTexto
-import retrofit2.awaitResponse
-
-private data class ConsultaDoProfissional(val dia: Dia, val hora: String, val paciente: String, val especialidade: String?)
 
 /**
- * Agenda do profissional: seus horários de atendimento (que definem quando o paciente pode marcar)
- * e as próximas consultas marcadas com os pacientes vinculados.
+ * Agenda do profissional (protótipo "Agenda - Profissional"):
+ *  - aba Eventos: calendário do mês, busca por paciente, consultas do dia e próximos atendimentos,
+ *    com "Nova consulta", detalhes, edição e exclusão;
+ *  - aba Disponibilidade: dias e horários em que os pacientes podem marcar consulta.
  */
 @Composable
-fun ConsultasProfissionalScreen(modifier: Modifier = Modifier) {
+fun ConsultasProfissionalScreen(
+    modifier: Modifier = Modifier,
+    viewModel: AgendaProfissionalViewModel = viewModel(),
+    disponibilidadeViewModel: DisponibilidadeViewModel = viewModel()
+) {
     val token = useAuth().auth?.token
-    var consultas by remember { mutableStateOf<List<ConsultaDoProfissional>?>(null) }
-    var erro by remember { mutableStateOf<String?>(null) }
+    val estado = viewModel.state
+    val disponibilidade = disponibilidadeViewModel.state
 
     LaunchedEffect(token) {
-        if (token.isNullOrBlank()) return@LaunchedEffect
-        try {
-            val r = RetrofitFactory().getProfissionalService().getMinhasConsultas(token).awaitResponse()
-            if (!r.isSuccessful && r.code() != 404) {
-                erro = "Não foi possível carregar as consultas."
-                return@LaunchedEffect
-            }
-            val hoje = Dia.hoje()
-            val agora = Dia.horaAgora()
-            consultas = (if (r.isSuccessful) r.body() else null).listaEm("consulta").mapNotNull { el ->
-                try {
-                    val o = el.asJsonObject
-                    if ((o.txt("status") ?: "").lowercase().contains("cancel")) return@mapNotNull null
-                    val dia = Dia.deIso(o.txt("data")) ?: return@mapNotNull null
-                    val hora = (o.txt("hora") ?: return@mapNotNull null).take(5)
-                    if (dia < hoje || (dia == hoje && hora < agora)) return@mapNotNull null
-                    ConsultaDoProfissional(dia, hora, o.txt("paciente_nome") ?: "Paciente", o.txt("especialidade"))
-                } catch (_: Exception) {
-                    null
-                }
-            }.sortedWith(compareBy({ it.dia }, { it.hora }))
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            erro = "Não foi possível conectar ao servidor."
+        if (!token.isNullOrBlank()) {
+            viewModel.carregar(token)
+            disponibilidadeViewModel.carregar(token)
         }
     }
 
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = modifier
-            .fillMaxSize()
-            .background(CorFundo)
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp)
-    ) {
-        DisponibilidadeSecao(token = token)
+    // Avisos do cadastro de horários também aparecem como o aviso verde/vermelho no canto da tela.
+    // remember: o aviso tem um id próprio, e um id novo a cada recomposição reiniciaria o tempo para sumir.
+    val avisoDisponibilidade = remember(disponibilidade.aviso, disponibilidade.avisoErro) {
+        disponibilidade.aviso?.let { MensagemToast(it, disponibilidade.avisoErro) }
+    }
+    val toast = estado.toast ?: avisoDisponibilidade
 
-        DialogaCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Próximas consultas", color = CorTexto, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                val lista = consultas
-                when {
-                    erro != null -> Text(erro!!, color = CorSecundaria, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
-                    lista == null -> Text("Carregando...", color = CorSecundaria, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
-                    lista.isEmpty() -> Text("Nenhuma consulta marcada.", color = CorSecundaria, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
-                    else -> lista.take(15).forEach { c ->
-                        Column(modifier = Modifier.padding(top = 10.dp)) {
-                            Text(c.paciente, color = CorTexto, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            Text(
-                                "${diaParaBr(c.dia)} às ${c.hora}" + (c.especialidade?.let { " • $it" } ?: ""),
-                                color = CorSecundaria, fontSize = 12.sp
-                            )
-                        }
+    Box(modifier = modifier.fillMaxSize().background(CorFundo)) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+        ) {
+            CabecalhoAgendaProfissional(onNovaConsulta = viewModel::abrirNovaConsulta)
+            AbasAgenda(aba = estado.aba, onSelecionar = viewModel::selecionarAba)
+
+            when (estado.aba) {
+                AbaAgenda.EVENTOS -> EventosConteudo(
+                    estado = estado,
+                    viewModel = viewModel,
+                    onTentarNovamente = { token?.let(viewModel::carregar) }
+                )
+                AbaAgenda.DISPONIBILIDADE -> DisponibilidadeAba(token = token, viewModel = disponibilidadeViewModel)
+            }
+
+            // folga para o aviso não cobrir o último card
+            if (toast != null) Spacer(modifier = Modifier.height(48.dp))
+        }
+
+        if (toast != null) {
+            ToastAgenda(
+                mensagem = toast,
+                onFechar = {
+                    viewModel.fecharToast()
+                    disponibilidadeViewModel.limparAviso()
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            )
+        }
+    }
+
+    // ---------- Pop-ups ----------
+
+    estado.detalhe?.let { consulta ->
+        DetalhesConsultaDialog(
+            consulta = consulta,
+            onFechar = viewModel::fecharDetalhe,
+            onEditar = { viewModel.abrirEdicao(consulta) },
+            onExcluir = { viewModel.pedirExclusao(consulta) }
+        )
+    }
+
+    estado.excluindo?.let { consulta ->
+        ExcluirConsultaDialog(
+            consulta = consulta,
+            removendo = estado.removendo,
+            onCancelar = viewModel::cancelarExclusao,
+            onConfirmar = { token?.let(viewModel::confirmarExclusao) }
+        )
+    }
+
+    estado.formulario?.let { formulario ->
+        FormularioConsultaDialog(
+            formulario = formulario,
+            pacientes = estado.pacientes,
+            disponibilidades = disponibilidade.itens,
+            onPacienteTexto = viewModel::alterarPacienteTexto,
+            onPacienteEscolhido = viewModel::escolherPaciente,
+            onData = viewModel::alterarData,
+            onHora = viewModel::alterarHora,
+            onSalvar = { token?.let(viewModel::salvar) },
+            onFechar = viewModel::fecharFormulario
+        )
+    }
+}
+
+@Composable
+private fun EventosConteudo(
+    estado: AgendaProfissionalState,
+    viewModel: AgendaProfissionalViewModel,
+    onTentarNovamente: () -> Unit
+) {
+    CalendarioAgendaProfissional(
+        mesVisivel = estado.mesVisivel,
+        diaSelecionado = estado.diaSelecionado,
+        diasComConsulta = estado.diasComConsulta,
+        onSelecionarDia = viewModel::selecionarDia,
+        onMudarMes = viewModel::mudarMes
+    )
+
+    CampoBusca(
+        valor = estado.busca,
+        onValorChange = viewModel::alterarBusca,
+        placeholder = "Buscar paciente...",
+        modifier = Modifier.fillMaxWidth()
+    )
+
+    when {
+        estado.carregando -> CardMensagemAgenda("Carregando...")
+        estado.erro != null -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+            Text(text = estado.erro, color = CorErro, fontSize = 13.sp)
+            TextButton(onClick = onTentarNovamente) { Text("Tentar novamente") }
+        }
+        else -> {
+            // ----- Consultas do dia selecionado -----
+            RotuloSecao(AgendaCalendario.tituloDiaSelecionado(estado.diaSelecionado))
+            val doDia = estado.doDia(estado.diaSelecionado)
+            if (doDia.isEmpty()) {
+                CardMensagemAgenda(if (estado.busca.isBlank()) "Nenhuma consulta neste dia." else "Nenhum paciente encontrado neste dia.")
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    doDia.forEach { consulta ->
+                        CardConsultaDoDia(consulta = consulta, onClick = { viewModel.abrirDetalhe(consulta) })
+                    }
+                }
+            }
+
+            // ----- Próximos atendimentos -----
+            RotuloSecao("Próximos atendimentos")
+            val proximas = estado.proximas()
+            if (proximas.isEmpty()) {
+                CardMensagemAgenda(if (estado.busca.isBlank()) "Nenhuma consulta marcada." else "Nenhum paciente encontrado.")
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    proximas.forEach { consulta ->
+                        CardProximoAtendimento(consulta = consulta, onClick = { viewModel.abrirDetalhe(consulta) })
                     }
                 }
             }

@@ -53,13 +53,14 @@ interface ProfissionalService {
     @GET("profissionais/me/disponibilidades")
     fun listarDisponibilidadesMe(@Header("x-access-token") token: String): Call<JsonObject>
 
+    @Headers("Content-Type: application/json")
     @POST("profissionais/me/disponibilidades")
     fun criarDisponibilidadeMe(
         @Header("x-access-token") token: String,
         @Body corpo: JsonObject
     ): Call<JsonObject>
 
-    @DELETE("profissionais/me/disponibilidades/{id}")
+    @DELETE("disponibilidades/{id}")
     fun excluirDisponibilidade(
         @Header("x-access-token") token: String,
         @Path("id") id: Int

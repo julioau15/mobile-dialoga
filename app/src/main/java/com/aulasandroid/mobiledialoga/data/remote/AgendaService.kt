@@ -45,6 +45,15 @@ interface AgendaService {
         @Body body: JsonObject
     ): Call<JsonObject>
 
+    // Reagendar/editar: o back exige o token (para saber se quem edita faz parte do vínculo) e o Content-Type exato
+    @Headers("Content-Type: application/json")
+    @PUT("consultas/{id}")
+    fun atualizarConsulta(
+        @Header("x-access-token") token: String,
+        @Path("id") id: Int,
+        @Body body: JsonObject
+    ): Call<JsonObject>
+
     // Cancelar = apagar: o back não tem outro jeito (o PUT não altera o status)
     @DELETE("consultas/{id}")
     fun cancelarConsulta(
