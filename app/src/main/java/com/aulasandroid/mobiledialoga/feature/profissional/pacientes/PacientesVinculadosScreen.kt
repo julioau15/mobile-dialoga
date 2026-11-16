@@ -38,6 +38,10 @@ import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +60,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aulasandroid.mobiledialoga.data.useAuth
 import com.aulasandroid.mobiledialoga.feature.perfil.components.AvisoPerfil
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.TarefasProfissionalUiState
+import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.TarefasProfissionalViewModel
+import androidx.compose.runtime.livedata.observeAsState
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.model.formatarDataBr
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.AvatarIniciais
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.BotaoModalPrincipal
@@ -96,8 +102,22 @@ fun PacientesVinculadosScreen(
     var aba by rememberSaveable { mutableStateOf(0) }
     var dialogo by remember { mutableStateOf<Dialogo?>(null) }
 
-    LaunchedEffect(token) {
-        if (!token.isNullOrBlank()) viewModel.carregar(token)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner, token, abertoId) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && !token.isNullOrBlank()) {
+                viewModel.carregar(token)
+                abertoId?.let { viewModel.carregarIndicadores(token, it) }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(token, abertoId) {
+        if (!token.isNullOrBlank()) {
+            viewModel.carregar(token)
+            abertoId?.let { viewModel.carregarIndicadores(token, it) }
+        }
     }
 
     // O aviso some sozinho após 3 segundos
@@ -108,7 +128,11 @@ fun PacientesVinculadosScreen(
         }
     }
 
-    val tarefas = TarefasProfissionalUiState()
+    val tarefasViewModel: TarefasProfissionalViewModel = viewModel()
+    val tarefas by tarefasViewModel.uiState.observeAsState(TarefasProfissionalUiState())
+    LaunchedEffect(token, abertoId) {
+        if (!token.isNullOrBlank() && abertoId != null) tarefasViewModel.carregarDados(token)
+    }
 
     BackHandler(enabled = abertoId != null) {
         abertoId = null
@@ -139,7 +163,10 @@ fun PacientesVinculadosScreen(
                 estado = estado,
                 tarefas = tarefas,
                 aba = aba,
-                onAba = { aba = it },
+                onAba = {
+                    aba = it
+                    if (it == 1) token?.let { valor -> viewModel.carregarIndicadores(valor, aberto.id) }
+                },
                 onVoltar = {
                     abertoId = null
                     aba = 0
@@ -148,7 +175,8 @@ fun PacientesVinculadosScreen(
                 onEditarNota = { dialogo = Dialogo.EditarNota(it) },
                 onExcluirNota = { nota -> dialogo = Dialogo.ExcluirNota(nota.id) },
                 onRecarregarNotas = { token?.let { viewModel.carregarAnotacoes(it, aberto.id) } },
-                onSolicitarAcesso = { dialogo = Dialogo.SolicitarAcesso }
+                onSolicitarAcesso = { dialogo = Dialogo.SolicitarAcesso },
+                onRecarregarIndicadores = { token?.let { viewModel.carregarIndicadores(it, aberto.id) } }
             )
         }
 
@@ -262,7 +290,7 @@ fun PacientesVinculadosScreen(
                 )
             }
         ) {
-            Text("O paciente receberá um pedido para compartilhar humor, sono e medicamentos com você.", color = CorSecundaria, fontSize = 14.sp)
+            Text("O paciente escolherá quais indicadores de humor, sono e acontecimentos deseja compartilhar com você.", color = CorSecundaria, fontSize = 14.sp)
         }
     }
 }

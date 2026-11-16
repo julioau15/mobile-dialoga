@@ -6,6 +6,9 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.aulasandroid.mobiledialoga.data.remote.RetrofitFactory
+import com.aulasandroid.mobiledialoga.feature.paciente.home.DashboardMapper
+import com.aulasandroid.mobiledialoga.feature.paciente.home.RegistroHumorApi
+import kotlinx.coroutines.Job
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.model.hojeIso
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.model.paraIso
 import com.aulasandroid.mobiledialoga.feature.vinculos.components.listaEm
@@ -65,6 +68,12 @@ data class PacientesProfissionalState(
     // ações
     val salvando: Boolean = false,
     val acessoSolicitado: Set<Int> = emptySet(),
+    val acessos: Map<Int, String> = emptyMap(),
+    val idIndicadores: Int? = null,
+    val carregandoIndicadores: Boolean = false,
+    val erroIndicadores: String? = null,
+    val categorias: Set<String> = emptySet(),
+    val registrosCompartilhados: List<RegistroHumorApi> = emptyList(),
     val toast: String? = null,
     val toastSucesso: Boolean = true
 ) {
@@ -86,6 +95,8 @@ class PacientesProfissionalViewModel : ViewModel() {
 
     var state by mutableStateOf(PacientesProfissionalState())
         private set
+
+    private var indicadoresJob: Job? = null
 
     private class Resp(val conectou: Boolean, val codigo: Int, val corpo: JsonObject?) {
         // O back responde 404 quando a lista está vazia: não é erro
@@ -112,10 +123,11 @@ class PacientesProfissionalViewModel : ViewModel() {
         viewModelScope.launch {
             val profissionalService = RetrofitFactory().getProfissionalService()
 
-            val (respPacientes, respConsultas) = coroutineScope {
+            val (respPacientes, respConsultas, respAcessos) = coroutineScope {
                 val p = async { chamar { profissionalService.listarPacientesVinculados(token) } }
                 val c = async { chamar { profissionalService.getMinhasConsultas(token) } }
-                p.await() to c.await()
+                val a = async { chamar { RetrofitFactory().getSolicitacaoAcessoService().listarSolicitacoesAcesso(token) } }
+                Triple(p.await(), c.await(), a.await())
             }
 
             if (respPacientes.falhou) {
@@ -166,7 +178,17 @@ class PacientesProfissionalViewModel : ViewModel() {
                 carregou = true,
                 erro = null,
                 pacientes = pacientes,
-                consultas = consultas
+                consultas = consultas,
+                acessos = if (respAcessos.ok) respAcessos.corpo.listaEm("solicitacaoAcesso")
+                    .map { it.asJsonObject }
+                    .sortedBy { it.num("id") }
+                    .associate { it.num("id_paciente") to it.txt("status").orEmpty() }
+                    else emptyMap(),
+                acessoSolicitado = if (respAcessos.ok) respAcessos.corpo.listaEm("solicitacaoAcesso")
+                    .map { it.asJsonObject }
+                    .sortedBy { it.num("id") }
+                    .associate { it.num("id_paciente") to it.txt("status") }
+                    .filterValues { it == "pendente" }.keys else emptySet()
             )
         }
     }
@@ -385,6 +407,8 @@ class PacientesProfissionalViewModel : ViewModel() {
                     toastSucesso = true
                 )
                 aoConcluir()
+                carregar(token)
+                carregarIndicadores(token, idPaciente)
             } else {
                 state = state.copy(
                     salvando = false,
@@ -392,6 +416,36 @@ class PacientesProfissionalViewModel : ViewModel() {
                     toastSucesso = false
                 )
             }
+        }
+    }
+
+    fun carregarIndicadores(token: String, idPaciente: Int) {
+        indicadoresJob?.cancel()
+        state = state.copy(
+            idIndicadores = idPaciente, carregandoIndicadores = true,
+            erroIndicadores = null, categorias = emptySet(), registrosCompartilhados = emptyList()
+        )
+        indicadoresJob = viewModelScope.launch {
+            val resp = chamar { RetrofitFactory().getSolicitacaoAcessoService().indicadoresCompartilhados(token, idPaciente) }
+            if (!resp.ok) {
+                state = state.copy(
+                    carregandoIndicadores = false,
+                    acessos = state.acessos - idPaciente,
+                    erroIndicadores = mensagemErroHttp(resp.codigo, !resp.conectou, "carregar os indicadores")
+                )
+                return@launch
+            }
+            val dados = resp.corpo?.getAsJsonObject("response")
+            val status = dados?.txt("status").orEmpty()
+            val categorias = dados?.getAsJsonArray("categorias")
+                ?.mapNotNull { it.takeIf { v -> v.isJsonPrimitive }?.asString }?.toSet().orEmpty()
+            state = state.copy(
+                carregandoIndicadores = false,
+                acessos = state.acessos + (idPaciente to status),
+                acessoSolicitado = if (status == "pendente") state.acessoSolicitado + idPaciente else state.acessoSolicitado - idPaciente,
+                categorias = categorias,
+                registrosCompartilhados = DashboardMapper.registrosHumor(resp.corpo)
+            )
         }
     }
 

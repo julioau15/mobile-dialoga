@@ -14,7 +14,8 @@ data class RegistroHumorApi(
     val energia: String?,
     val humor: String?,
     val horasSono: Double?,
-    val pensamento: String?
+    val pensamento: String?,
+    val relato: String? = null
 )
 
 /** Converte o valor textual escolhido no formulário em 0-100 para as barras do dashboard. */
@@ -230,7 +231,8 @@ object DashboardMapper {
                 humor = o.texto("humor"),
                 horasSono = o.numero("horas_sono", "horasSono"),
                 // o back chama esta coluna de padrao_pensamentos
-                pensamento = o.texto("padrao_pensamentos", "pensamento", "pensamentos")
+                pensamento = o.texto("padrao_pensamentos", "pensamento", "pensamentos"),
+                relato = o.texto("relato", "observacoes", "observacao")
             )
         }.sortedBy { it.data }
 

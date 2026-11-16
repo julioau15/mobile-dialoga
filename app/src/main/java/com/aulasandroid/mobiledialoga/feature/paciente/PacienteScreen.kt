@@ -119,7 +119,7 @@ fun PacienteScreen(onLogout: () -> Unit) {
                 modifier = modifier,
                 viewModel = dashboardViewModel
             )
-            PacienteSubRota.RELATORIOS -> RelatoriosPacienteScreen(modifier = modifier)
+            PacienteSubRota.RELATORIOS -> RelatoriosPacienteScreen(onNavigate = { subRotaAtual = it }, modifier = modifier)
             PacienteSubRota.TRATAMENTO -> TratamentoScreen(modifier = modifier)
             PacienteSubRota.AGENDA -> ConsultasPacienteScreen(modifier = modifier)
             PacienteSubRota.PROFISSIONAIS -> BuscaProfissionaisScreen(modifier = modifier)

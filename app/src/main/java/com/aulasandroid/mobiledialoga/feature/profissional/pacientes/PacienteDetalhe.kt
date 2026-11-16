@@ -83,7 +83,8 @@ internal fun PacienteDetalhe(
     onEditarNota: (AnotacaoUi) -> Unit,
     onExcluirNota: (AnotacaoUi) -> Unit,
     onRecarregarNotas: () -> Unit,
-    onSolicitarAcesso: () -> Unit
+    onSolicitarAcesso: () -> Unit,
+    onRecarregarIndicadores: () -> Unit
 ) {
     val acompanhamentos = tarefas.acompanhamentos.filter { it.idPaciente == paciente.id }
     val concluidas = acompanhamentos.count { it.status() == StatusDestinatario.CONCLUIDA }
@@ -119,7 +120,7 @@ internal fun PacienteDetalhe(
 
         when (aba) {
             0 -> AbaAnotacoes(estado, onNovaNota, onEditarNota, onExcluirNota, onRecarregarNotas)
-            1 -> AbaIndicadores(paciente, estado, onSolicitarAcesso)
+            1 -> AbaIndicadores(paciente, estado, tarefas, onSolicitarAcesso, onRecarregarIndicadores)
             else -> AbaHistoricoTarefas(acompanhamentos, tarefas)
         }
 
@@ -176,7 +177,13 @@ private fun CabecalhoPaciente(
             }
 
             EspacoV(14.dp)
-            if (estado.acessoSolicitado.contains(paciente.id)) {
+            if (estado.acessos[paciente.id] == "aprovada") {
+                ChipStatus("Acesso autorizado", CorChipVerdeFundo, CorChipVerdeTexto)
+            } else if (estado.carregandoIndicadores && estado.idIndicadores == paciente.id) {
+                Text("Verificando acesso...", color = CorSecundaria, fontSize = 12.sp)
+            } else if (estado.erroIndicadores != null && estado.idIndicadores == paciente.id) {
+                Text("Não foi possível verificar o acesso.", color = CorSecundaria, fontSize = 12.sp)
+            } else if (estado.acessoSolicitado.contains(paciente.id)) {
                 ChipStatus("Solicitação de acesso enviada", CorChipAmareloFundo, CorChipAmareloTexto)
             } else {
                 OutlinedButton(
@@ -337,39 +344,7 @@ private fun AbaAnotacoes(
 // Aba: Indicadores (precisa do acesso autorizado pelo paciente)
 // ---------------------------------------------------------------------------
 
-@Composable
-private fun AbaIndicadores(
-    paciente: PacienteVinculadoUi,
-    estado: PacientesProfissionalState,
-    onSolicitarAcesso: () -> Unit
-) {
-    CartaoAba {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(24.dp)) {
-            Text("\uD83D\uDCCA", fontSize = 30.sp)
-            EspacoV(8.dp)
-            Text("Indicadores do paciente", color = CorTexto, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            EspacoV(4.dp)
-            Text(
-                "Humor, sono e aderência ao tratamento aparecem aqui depois que ${paciente.nome} autorizar o acesso. " +
-                        "Esta área ainda será liberada nesta versão do app.",
-                color = CorSecundaria,
-                fontSize = 13.sp,
-                lineHeight = 18.sp,
-                textAlign = TextAlign.Center
-            )
-            EspacoV(14.dp)
-            if (estado.acessoSolicitado.contains(paciente.id)) {
-                ChipStatus("Solicitação de acesso enviada", CorChipAmareloFundo, CorChipAmareloTexto)
-            } else {
-                Button(
-                    onClick = onSolicitarAcesso,
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = CorPrimaria, contentColor = CorBranco)
-                ) { Text("Solicitar acesso", fontSize = 13.sp, fontWeight = FontWeight.Bold) }
-            }
-        }
-    }
-}
+
 
 // ---------------------------------------------------------------------------
 // Aba: Histórico de tarefas
