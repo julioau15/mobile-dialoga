@@ -19,7 +19,6 @@ import com.aulasandroid.mobiledialoga.data.AuthProvider
 import com.aulasandroid.mobiledialoga.navigation.AppNavigation
 import com.aulasandroid.mobiledialoga.ui.theme.MobileDialogaTheme
 
-
 class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher = registerForActivityResult(

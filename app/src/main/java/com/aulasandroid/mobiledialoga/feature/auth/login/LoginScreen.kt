@@ -1,6 +1,7 @@
 package com.aulasandroid.mobiledialoga.feature.auth.login
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,13 +27,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aulasandroid.mobiledialoga.components.DialogaTextLink
 import com.aulasandroid.mobiledialoga.data.useAuth
+import com.aulasandroid.mobiledialoga.feature.auth.legal.DocumentoLegalDialog
+import com.aulasandroid.mobiledialoga.feature.auth.legal.TipoDocumento
 import com.aulasandroid.mobiledialoga.feature.auth.login.components.LoginForm
 import com.aulasandroid.mobiledialoga.feature.auth.login.components.LoginHero
 import com.aulasandroid.mobiledialoga.ui.theme.CorFundoLogin
+import com.aulasandroid.mobiledialoga.ui.theme.CorPrimaria
 import com.aulasandroid.mobiledialoga.ui.theme.CorSecundaria
 import com.aulasandroid.mobiledialoga.ui.theme.MobileDialogaTheme
 
@@ -46,6 +54,11 @@ fun LoginScreen(
     val estado by viewModel.uiState.observeAsState(LoginUiState())
     val authState = useAuth()
     val context = LocalContext.current
+    var documentoAberto by rememberSaveable { mutableStateOf<TipoDocumento?>(null) }
+
+    documentoAberto?.let { tipo ->
+        DocumentoLegalDialog(tipo = tipo, onFechar = { documentoAberto = null })
+    }
 
     Column(
         modifier = Modifier
@@ -100,12 +113,29 @@ fun LoginScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 24.dp),
-            horizontalArrangement = Arrangement.Center
+                .padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = "Termos de Uso", color = CorSecundaria, fontSize = 13.sp)
-            Text(text = "  |  ", color = CorSecundaria, fontSize = 13.sp)
-            Text(text = "Política de Privacidade", color = CorSecundaria, fontSize = 13.sp)
+            Text(
+                text = "Termos de Uso",
+                color = CorPrimaria,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clickable { documentoAberto = TipoDocumento.TERMOS_DE_USO }
+                    .padding(horizontal = 6.dp, vertical = 8.dp)
+            )
+            Text(text = "|", color = CorSecundaria, fontSize = 13.sp)
+            Text(
+                text = "Política de Privacidade",
+                color = CorPrimaria,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clickable { documentoAberto = TipoDocumento.POLITICA_DE_PRIVACIDADE }
+                    .padding(horizontal = 6.dp, vertical = 8.dp)
+            )
         }
     }
 }
