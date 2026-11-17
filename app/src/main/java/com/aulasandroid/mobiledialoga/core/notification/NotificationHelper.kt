@@ -36,10 +36,21 @@ object NotificationHelper {
         }
     }
 
+    @Synchronized
     @SuppressLint("MissingPermission")
     fun mostrarNotificacao(context: Context, titulo: String, mensagem: String, notificacaoId: Int = (Math.random() * 10000).toInt()): Boolean {
         try {
             criarCanal(context)
+            val manager = NotificationManagerCompat.from(context)
+            if (!manager.areNotificationsEnabled()) return false
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val sistema = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                if (sistema.getNotificationChannel(CHANNEL_ID)?.importance == NotificationManager.IMPORTANCE_NONE) return false
+            }
+            // Fica separado da sessão para não reenviar avisos depois de sair e entrar.
+            val prefs = context.getSharedPreferences("notificacoes_entregues", Context.MODE_PRIVATE)
+            val entregues = prefs.getStringSet("ids", emptySet()).orEmpty().toMutableSet()
+            if (notificacaoId.toString() in entregues) return true
 
             val intent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
@@ -59,6 +70,7 @@ object NotificationHelper {
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setContentIntent(pendingIntent)
+                .setOnlyAlertOnce(true)
                 .setAutoCancel(true)
 
             with(NotificationManagerCompat.from(context)) {
@@ -66,6 +78,8 @@ object NotificationHelper {
                     ActivityCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
                 ) {
                     notify(NOTIFICATION_ID_BASE + notificacaoId, builder.build())
+                    entregues.add(notificacaoId.toString())
+                    prefs.edit().putStringSet("ids", entregues).commit()
                     return true
                 }
             }

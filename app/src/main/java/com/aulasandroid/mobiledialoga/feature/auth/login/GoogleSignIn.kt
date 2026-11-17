@@ -10,7 +10,7 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import org.json.JSONObject
 
@@ -58,12 +58,8 @@ object GoogleSignIn {
         val activity = context.findActivity() ?: context
         val gerenciador = CredentialManager.create(activity)
 
-        limparSessao(activity)
-
-        val googleIdOption = GetGoogleIdOption.Builder()
-            .setFilterByAuthorizedAccounts(false)
-            .setServerClientId(GOOGLE_WEB_CLIENT_ID)
-            .setAutoSelectEnabled(false)
+        // Fluxo explícito do botão: abre o seletor mesmo após dispensar a bottom sheet.
+        val googleIdOption = GetSignInWithGoogleOption.Builder(GOOGLE_WEB_CLIENT_ID)
             .build()
 
         val pedido = GetCredentialRequest.Builder()

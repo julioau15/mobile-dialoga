@@ -126,6 +126,8 @@ fun DetalhesConsultaDialog(
             ) {
                 Text(
                     text = com.aulasandroid.mobiledialoga.feature.vinculos.components.iniciaisDe(consulta.paciente),
+                    maxLines = 1,
+                    softWrap = false,
                     color = CorBranco,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold

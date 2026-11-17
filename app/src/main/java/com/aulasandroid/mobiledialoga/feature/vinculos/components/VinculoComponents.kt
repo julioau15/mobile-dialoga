@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -69,11 +70,13 @@ fun AvatarIniciais(nome: String, tamanho: Dp = 44.dp, modifier: Modifier = Modif
     val url = com.aulasandroid.mobiledialoga.model.UserProfile(foto = fotoUrl).getFotoUrlCompleta()
     Box(
         contentAlignment = Alignment.Center,
-        modifier = modifier.size(tamanho).clip(CircleShape).background(CorAvatarFundo)
+        modifier = modifier.then(Modifier.requiredSize(tamanho)).clip(CircleShape).background(CorAvatarFundo)
     ) {
         // as iniciais ficam por baixo: se a foto não existir ou falhar ao carregar, elas continuam aparecendo
         Text(
             text = iniciaisDe(nome),
+            maxLines = 1,
+            softWrap = false,
             color = CorPrimaria,
             fontSize = if (tamanho >= 56.dp) 18.sp else 13.sp,
             fontWeight = FontWeight.Bold

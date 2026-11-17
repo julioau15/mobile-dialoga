@@ -50,7 +50,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -87,23 +86,9 @@ fun NotificacoesScreen(
     val authState = useAuth()
     val token = authState.auth?.token
     val estado by viewModel.uiState.observeAsState(NotificacoesUiState())
-    val context = LocalContext.current
-    val idsNotificados = remember { mutableSetOf<Int>() }
-
+    // A consulta da sessão é a única responsável por publicar alertas no Android.
+    // Abrir a lista apenas carrega o histórico, sem reenviar notificações.
     LaunchedEffect(token) { viewModel.carregar(token) }
-
-    LaunchedEffect(estado.notificacoes) {
-        estado.notificacoes.filter { !it.lida }.forEach { item ->
-            if (idsNotificados.add(item.id)) {
-                com.aulasandroid.mobiledialoga.core.notification.NotificationHelper.mostrarNotificacao(
-                    context,
-                    item.titulo(perfil),
-                    item.mensagem,
-                    item.id
-                )
-            }
-        }
-    }
 
     // o aviso verde some sozinho depois de 3 segundos
     LaunchedEffect(estado.toast) {
@@ -618,7 +603,7 @@ private fun ConfiguracoesNotificacoes(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             Button(
                 onClick = onSalvar,
-                enabled = !estado.configSalvando && !estado.configCarregando,
+                enabled = !estado.configSalvando && !estado.configCarregando && estado.configPronta,
                 shape = RoundedCornerShape(24.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = CorPrimaria),
                 contentPadding = PaddingValues(horizontal = 22.dp, vertical = 12.dp)
@@ -626,7 +611,7 @@ private fun ConfiguracoesNotificacoes(
                 if (estado.configSalvando) {
                     CircularProgressIndicator(color = CorBranco, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                 } else {
-                    Text("Salvar preferências", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Salvar preferências", color = CorBranco, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

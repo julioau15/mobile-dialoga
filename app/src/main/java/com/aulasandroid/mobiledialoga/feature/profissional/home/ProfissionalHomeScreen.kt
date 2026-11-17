@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aulasandroid.mobiledialoga.data.useAuth
+import com.aulasandroid.mobiledialoga.feature.vinculos.components.AvatarIniciais
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.TarefasProfissionalUiState
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.TarefasProfissionalViewModel
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.model.ProfissionalTarefaDto
@@ -170,7 +171,7 @@ fun ProfissionalHomeScreen(
                 estado.atendimentosHoje.forEachIndexed { i, a ->
                     if (i > 0) HorizontalDivider(color = CorLinha)
                     LinhaPessoa(
-                        iniciais = iniciaisDe(a.paciente),
+                        fotoUrl = a.foto,
                         fundoAvatar = CorAvatarAtendimentoFundo,
                         corAvatar = CorPrimaria,
                         titulo = a.paciente,
@@ -196,7 +197,7 @@ fun ProfissionalHomeScreen(
                 recentes.forEachIndexed { i, p ->
                     if (i > 0) HorizontalDivider(color = CorLinha)
                     LinhaPessoa(
-                        iniciais = iniciaisDe(p.nome),
+                        fotoUrl = p.foto,
                         fundoAvatar = CorAvatarPacienteFundo,
                         corAvatar = CorAvatarPacienteTexto,
                         titulo = p.nome,
@@ -363,7 +364,7 @@ private fun CartaoSecao(
 
 @Composable
 private fun LinhaPessoa(
-    iniciais: String,
+    fotoUrl: String?,
     fundoAvatar: Color,
     corAvatar: Color,
     titulo: String,
@@ -374,12 +375,7 @@ private fun LinhaPessoa(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.size(40.dp).clip(CircleShape).background(fundoAvatar)
-        ) {
-            Text(text = iniciais, color = corAvatar, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        }
+        AvatarIniciais(titulo, tamanho = 40.dp, fotoUrl = fotoUrl)
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(

@@ -23,6 +23,7 @@ data class NotificacoesUiState(
     // tela de configurações
     val emConfig: Boolean = false,
     val configCarregando: Boolean = false,
+    val configPronta: Boolean = false,
     val configSalvando: Boolean = false,
     val configErro: String? = null,
     val prefs: Map<String, Boolean> = emptyMap(),
@@ -133,6 +134,7 @@ class NotificacoesViewModel : ViewModel() {
         _uiState.value = estado.copy(
             emConfig = true,
             configCarregando = !token.isNullOrBlank(),
+            configPronta = false,
             configErro = null,
             prefs = padroes,
             desligarTodas = false
@@ -147,12 +149,13 @@ class NotificacoesViewModel : ViewModel() {
                     val tudoOff = mescladas.isNotEmpty() && mescladas.values.none { it }
                     _uiState.value = estado.copy(
                         configCarregando = false,
+                        configPronta = true,
                         prefs = mescladas,
                         desligarTodas = tudoOff
                     )
                 } else if (response.code() == 404) {
                     // ainda não salvou nada: vale o padrão
-                    _uiState.value = estado.copy(configCarregando = false)
+                    _uiState.value = estado.copy(configCarregando = false, configPronta = true)
                 } else {
                     _uiState.value = estado.copy(
                         configCarregando = false,
@@ -172,6 +175,7 @@ class NotificacoesViewModel : ViewModel() {
     }
 
     fun alterarPreferencia(chave: String, ativo: Boolean) {
+        if (estado.configCarregando || estado.configSalvando || !estado.configPronta) return
         // mexer em um item individual tira o "Desligar todas"
         _uiState.value = estado.copy(
             prefs = estado.prefs + (chave to ativo),
@@ -180,6 +184,7 @@ class NotificacoesViewModel : ViewModel() {
     }
 
     fun alternarDesligarTodas(desligar: Boolean) {
+        if (estado.configCarregando || estado.configSalvando || !estado.configPronta) return
         if (desligar) {
             prefsAntesDeDesligar = estado.prefs
             _uiState.value = estado.copy(
@@ -196,7 +201,7 @@ class NotificacoesViewModel : ViewModel() {
     }
 
     fun salvarPreferencias(perfil: PerfilNotificacao, token: String?) {
-        if (token.isNullOrBlank() || estado.configSalvando) return
+        if (token.isNullOrBlank() || estado.configSalvando || estado.configCarregando || !estado.configPronta) return
         val lista = JsonArray()
         for (grupo in gruposPreferencia(perfil)) {
             for (item in grupo.itens) {
@@ -233,8 +238,11 @@ class NotificacoesViewModel : ViewModel() {
 
     private fun mesclarComServidor(padroes: Map<String, Boolean>, lista: JsonArray): Map<String, Boolean> {
         val resultado = padroes.toMutableMap()
-        for (elem in lista) {
-            if (!elem.isJsonObject) continue
+        // Aplica as regras gerais antes das específicas, independentemente da ordem do servidor.
+        val ordenadas = lista.filter { it.isJsonObject }.sortedBy {
+            if (it.asJsonObject.get("tipo_especifico").texto().isNullOrBlank()) 0 else 1
+        }
+        for (elem in ordenadas) {
             val obj = elem.asJsonObject
             val categoria = obj.get("categoria").texto() ?: continue
             val tipo = obj.get("tipo_especifico").texto()

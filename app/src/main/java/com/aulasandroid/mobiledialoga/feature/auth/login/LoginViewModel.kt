@@ -14,7 +14,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 
-class LoginViewModel : ViewModel() {
+class
+LoginViewModel : ViewModel() {
 
     private val _uiState = MutableLiveData(LoginUiState())
     val uiState: LiveData<LoginUiState> = _uiState
@@ -90,7 +91,10 @@ class LoginViewModel : ViewModel() {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.value = estado.copy(isGoogleLoading = false, escolherContaDoAparelho = true)
+                _uiState.value = estado.copy(
+                    isGoogleLoading = false,
+                    erroGeral = "Não foi possível abrir o login do Google. Verifique sua conexão e tente novamente."
+                )
                 return@launch
             }
             concluirLoginGoogle(googleData, authState, onLoginSuccess, onProfissionalEmAnalise, onCadastrarComGoogle)

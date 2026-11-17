@@ -23,7 +23,22 @@ class MainActivity : ComponentActivity() {
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { _ -> }
+    ) { concedida ->
+        if (!concedida && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)
+        ) {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Notificações desativadas")
+                .setMessage("Você pode permitir os avisos do Dialoga nas configurações do aparelho.")
+                .setPositiveButton("Abrir configurações") { _, _ ->
+                    startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, packageName)
+                    })
+                }
+                .setNegativeButton("Agora não", null)
+                .show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,7 +50,20 @@ class MainActivity : ComponentActivity() {
         // Solicita permissão de notificação no Android 13+ (API 33+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                val preferencias = getSharedPreferences("permissoes", MODE_PRIVATE)
+                if (shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS)) {
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("Receber notificações")
+                        .setMessage("Permita as notificações para receber avisos de consultas, tarefas e solicitações.")
+                        .setPositiveButton("Continuar") { _, _ ->
+                            requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                        .setNegativeButton("Agora não", null)
+                        .show()
+                } else if (!preferencias.getBoolean("notificacoes_solicitadas", false)) {
+                    preferencias.edit().putBoolean("notificacoes_solicitadas", true).apply()
+                    requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
             }
         }
 

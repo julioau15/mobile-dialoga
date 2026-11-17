@@ -24,6 +24,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+private val notificacoesMutex = Mutex()
 
 private const val TAG = "AuthState"
 private const val PREFS = "auth_prefs"
@@ -164,8 +168,8 @@ class AuthState(private val context: Context) {
         }
     }
 
-    suspend fun verificarNovasNotificacoes() {
-        val tokenAtual = auth?.token ?: return
+    suspend fun verificarNovasNotificacoes() = notificacoesMutex.withLock {
+        val tokenAtual = auth?.token ?: return@withLock
         val novosAvisos = withContext(Dispatchers.IO) {
             try {
                 val resp = RetrofitFactory().getNotificacaoService().listarNotificacoes(tokenAtual).execute()
@@ -197,8 +201,9 @@ class AuthState(private val context: Context) {
                             if (categoria == 3) tarefas = true
                         }
 
+                        if (auth?.token != tokenAtual) return@withContext null
                         if (!lida && !idsVistos.contains(id.toString())) {
-                            val mostrou = withContext(Dispatchers.Main) {
+                            val mostrou = withContext(Dispatchers.IO) {
                                 com.aulasandroid.mobiledialoga.core.notification.NotificationHelper.mostrarNotificacao(
                                     context,
                                     "Dialoga",
@@ -220,7 +225,7 @@ class AuthState(private val context: Context) {
             }
         }
         // null = não conseguiu consultar (sem rede): mantém o que já estava na tela
-        if (novosAvisos != null) withContext(Dispatchers.Main) { avisos = novosAvisos }
+        if (novosAvisos != null && auth?.token == tokenAtual) withContext(Dispatchers.Main) { avisos = novosAvisos }
     }
 
     private fun extrairCrp(element: JsonElement?): String? {

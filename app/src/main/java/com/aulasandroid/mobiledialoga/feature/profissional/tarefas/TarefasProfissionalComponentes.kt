@@ -276,7 +276,7 @@ internal fun Avatar(nome: String, cor: Color, tamanho: Dp = 44.dp) {
         .let { p -> if (p.size >= 2) "${p.first().first()}${p.last().first()}" else p.firstOrNull()?.take(2).orEmpty() }
         .uppercase()
     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(tamanho).clip(CircleShape).background(cor)) {
-        Text(text = iniciais, color = Color.White, fontSize = (tamanho.value * 0.32f).sp, fontWeight = FontWeight.Bold)
+        Text(text = iniciais, maxLines = 1, softWrap = false, color = Color.White, fontSize = (tamanho.value * 0.32f).sp, fontWeight = FontWeight.Bold)
     }
 }
 

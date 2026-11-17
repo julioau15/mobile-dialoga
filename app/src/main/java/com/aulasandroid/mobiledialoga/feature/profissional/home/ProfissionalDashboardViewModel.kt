@@ -21,14 +21,16 @@ data class AtendimentoHojeUi(
     val id: Int,
     val paciente: String,
     val titulo: String,
-    val hora: String // "09:00"
+    val hora: String, // "09:00"
+    val foto: String? = null
 )
 
 data class PacienteRecenteUi(
     val id: Int,
     val nome: String,
     val proximaIso: String?, // próxima consulta (yyyy-MM-dd) ou null
-    val ativo: Boolean
+    val ativo: Boolean,
+    val foto: String? = null
 )
 
 data class ProfissionalDashboardState(
@@ -81,10 +83,12 @@ class ProfissionalDashboardViewModel : ViewModel() {
             val consultas = lerConsultas(respConsultas.corpo)
             val hoje = hojeIso()
 
+            val pacientes = lerPacientes(respPacientes.corpo, emptyMap())
+            val fotosPorPaciente = pacientes.associate { it.id to it.foto }
             val atendimentosHoje = consultas
                 .filter { it.dataIso == hoje }
                 .sortedBy { it.hora }
-                .map { AtendimentoHojeUi(it.id, it.paciente, it.titulo, it.hora) }
+                .map { AtendimentoHojeUi(it.id, it.paciente, it.titulo, it.hora, fotosPorPaciente[it.idPaciente]) }
 
             // Próxima consulta de cada paciente = a data mais próxima de hoje em diante
             val proximaPorPaciente: Map<Int, String> = consultas
@@ -92,13 +96,13 @@ class ProfissionalDashboardViewModel : ViewModel() {
                 .groupBy { it.idPaciente }
                 .mapValues { (_, lista) -> lista.minOf { it.dataIso!! } }
 
-            val pacientes = lerPacientes(respPacientes.corpo, proximaPorPaciente)
+            val pacientesComConsultas = lerPacientes(respPacientes.corpo, proximaPorPaciente)
 
             state = ProfissionalDashboardState(
                 isLoading = false,
                 carregou = true,
                 erro = null,
-                pacientes = pacientes,
+                pacientes = pacientesComConsultas,
                 atendimentosHoje = atendimentosHoje
             )
         }
@@ -162,7 +166,8 @@ class ProfissionalDashboardViewModel : ViewModel() {
                         id = id,
                         nome = texto(obj, "nome_completo") ?: "Paciente $id",
                         proximaIso = proximaPorPaciente[id],
-                        ativo = status.isEmpty() || status.startsWith("ativ")
+                        ativo = status.isEmpty() || status.startsWith("ativ"),
+                        foto = texto(obj, "foto_avatar") ?: texto(obj, "foto")
                     )
                 )
             } catch (_: Exception) { }

@@ -41,7 +41,8 @@ class PacienteDashboardViewModel : ViewModel() {
         viewModelScope.launch {
             val service = RetrofitFactory().getPacienteService()
 
-            // As 5 chamadas rodam em paralelo; falha individual vira null (seção vazia).
+            // Listas vazias (404) são respostas válidas para pacientes novos.
+            // null fica reservado para falhas ao consultar o servidor.
             val respostas = coroutineScope {
                 listOf(
                     async { service.getMeusTratamentos(token).corpo() },
@@ -133,7 +134,11 @@ class PacienteDashboardViewModel : ViewModel() {
 
     private suspend fun Call<JsonObject>.corpo(): JsonObject? = try {
         val r = awaitResponse()
-        if (r.isSuccessful) r.body() else null
+        when {
+            r.isSuccessful -> r.body() ?: JsonObject()
+            r.code() == 404 -> JsonObject() // O backend usa 404 para listas sem registros.
+            else -> null
+        }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
