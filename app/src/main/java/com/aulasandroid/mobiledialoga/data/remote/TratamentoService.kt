@@ -19,7 +19,10 @@ interface TratamentoService {
     fun listarTratamentos(@Header("x-access-token") token: String): Call<JsonObject>
 
     @GET("tratamentos/{id}")
-    fun buscarTratamentoPorId(@Path("id") id: Int): Call<JsonObject>
+    fun buscarTratamentoPorId(
+        @Header("x-access-token") token: String,
+        @Path("id") id: Int
+    ): Call<JsonObject>
 
     @Headers("Content-Type: application/json")
     @POST("tratamentos")
@@ -28,15 +31,27 @@ interface TratamentoService {
         @Body dados: JsonObject
     ): Call<JsonObject>
 
+    /** Cria o tratamento do paciente logado (o POST /tratamentos puro não grava o id_paciente). */
+    @Headers("Content-Type: application/json")
+    @POST("pacientes/me/tratamentos")
+    fun criarMeuTratamento(
+        @Header("x-access-token") token: String,
+        @Body dados: JsonObject
+    ): Call<JsonObject>
+
     @Headers("Content-Type: application/json")
     @PUT("tratamentos/{id}")
     fun atualizarTratamento(
+        @Header("x-access-token") token: String,
         @Path("id") id: Int,
         @Body dados: JsonObject
     ): Call<JsonObject>
 
     @DELETE("tratamentos/{id}")
-    fun excluirTratamento(@Path("id") id: Int): Call<JsonObject>
+    fun excluirTratamento(
+        @Header("x-access-token") token: String,
+        @Path("id") id: Int
+    ): Call<JsonObject>
 
     @Headers("Content-Type: application/json")
     @POST("registros-dose")

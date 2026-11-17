@@ -20,7 +20,7 @@ private fun IndicadoresPacientePreview() {
     val paciente = PacienteVinculadoUi(
         id = 1, idVinculo = 1, nome = "Ana Beatriz Ferreira",
         ativo = true, statusVinculo = 1, origemCadastro = 1,
-        desdeIso = null, email = null, celular = null
+        desdeIso = null, email = null, celular = null, foto = null
     )
     val registros = listOf(
         RegistroHumorApi(DatasRelatorio.somarDias(DatasRelatorio.hoje(), -2), "Feliz", "Alta", "Muito bem", 8.0, "Positivos", "Fim de semana ótimo. Exercício e leitura durante a tarde."),

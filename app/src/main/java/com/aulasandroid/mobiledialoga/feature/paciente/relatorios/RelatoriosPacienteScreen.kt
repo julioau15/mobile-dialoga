@@ -11,6 +11,7 @@ import kotlinx.coroutines.withContext
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -418,7 +419,12 @@ private fun DialogoSolicitacao(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(10.dp))
-                                    .background(if (marcada) CoresRelatorio.RoxoClaro else Color.White)
+                                    .background(if (marcada) CoresRelatorio.RoxoClaro else Color(0xFFF7F5FA))
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (marcada) CoresRelatorio.Roxo else Color(0xFFC8C2D6),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
                                     .clickable(enabled = !respondendo) { marcadas = if (marcada) marcadas - opcao else marcadas + opcao }
                                     .padding(horizontal = 10.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -426,14 +432,19 @@ private fun DialogoSolicitacao(
                                 Box(
                                     modifier = Modifier
                                         .size(18.dp)
+                                        .border(
+                                            width = 1.5.dp,
+                                            color = if (marcada) CoresRelatorio.Roxo else Color(0xFF6B538C),
+                                            shape = RoundedCornerShape(4.dp)
+                                        )
                                         .clip(RoundedCornerShape(4.dp))
-                                        .background(if (marcada) CoresRelatorio.Roxo else Color.White),
+                                        .background(if (marcada) CoresRelatorio.Roxo else Color(0xFFEDE8F5)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     if (marcada) Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(13.dp))
                                 }
                                 Spacer(Modifier.width(8.dp))
-                                Text(opcao, fontSize = 12.sp, color = CoresRelatorio.RoxoEscuro, maxLines = 1)
+                                Text(opcao, fontSize = 12.sp, color = CoresRelatorio.RoxoEscuro, fontWeight = FontWeight.Medium, maxLines = 1)
                             }
                         }
                     }
@@ -456,7 +467,7 @@ private fun DialogoSolicitacao(
                         if (respondendo) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color.White)
                         } else {
-                            Text(if (solicitacao.pendente) "Aprovar" else "Salvar", fontWeight = FontWeight.SemiBold)
+                            Text(if (solicitacao.pendente) "Aprovar" else "Salvar", fontWeight = FontWeight.SemiBold, color = Color.White)
                         }
                     }
                 }

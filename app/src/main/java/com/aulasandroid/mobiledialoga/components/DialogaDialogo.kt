@@ -45,6 +45,7 @@ fun DialogaDialogo(
             shadowElevation = 8.dp,
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxHeight(0.85f)
                 .padding(horizontal = 24.dp)
         ) {
             Column {

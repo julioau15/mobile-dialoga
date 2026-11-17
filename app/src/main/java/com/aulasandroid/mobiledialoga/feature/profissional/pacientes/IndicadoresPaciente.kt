@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -181,8 +182,56 @@ internal fun AbaIndicadores(
 
             CardIndicador {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CabecalhoIndicador("💊", "Aderência ao tratamento", "Dados informados pelo paciente")
-                    TextoIndicadorVazio("Não há dados de aderência ao tratamento compartilhados.")
+                    CabecalhoIndicador("💊", "Aderência ao tratamento", "Tratamentos cadastrados pelo paciente")
+                    if (estado.tratamentosCompartilhados.isEmpty()) {
+                        TextoIndicadorVazio("Não há dados de aderência ao tratamento compartilhados.")
+                    } else {
+                        estado.tratamentosCompartilhados.forEach { t ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(FundoIndicador, RoundedCornerShape(10.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        t.nome,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = CorTexto
+                                    )
+                                    if (t.dosagem.isNotBlank()) {
+                                        Text(
+                                            t.dosagem,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = CorPrimaria
+                                        )
+                                    }
+                                }
+                                if (t.frequencia.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "Frequência: ${t.frequencia}",
+                                        fontSize = 12.sp,
+                                        color = CorSecundaria
+                                    )
+                                }
+                                if (t.horarios.isNotEmpty()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        "Horários: ${t.horarios.joinToString(", ")}",
+                                        fontSize = 12.sp,
+                                        color = CorSecundaria
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

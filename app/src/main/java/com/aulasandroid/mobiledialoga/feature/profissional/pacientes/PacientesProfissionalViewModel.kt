@@ -8,6 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.aulasandroid.mobiledialoga.data.remote.RetrofitFactory
 import com.aulasandroid.mobiledialoga.feature.paciente.home.DashboardMapper
 import com.aulasandroid.mobiledialoga.feature.paciente.home.RegistroHumorApi
+import com.aulasandroid.mobiledialoga.feature.paciente.tratamento.TratamentoMapper
+import com.aulasandroid.mobiledialoga.feature.paciente.tratamento.TratamentoUi
 import kotlinx.coroutines.Job
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.model.hojeIso
 import com.aulasandroid.mobiledialoga.feature.profissional.tarefas.model.paraIso
@@ -34,13 +36,17 @@ data class PacienteVinculadoUi(
     val desdeIso: String?,
     val email: String?, // o back só devolve contato depois que o vínculo é aceito
     val celular: String?,
-    val foto: String? = null
+    val foto: String?
 ) {
     val aguardandoAceite: Boolean get() = statusVinculo == 0
-    val podeAprovar: Boolean get() = aguardandoAceite && origemCadastro == 2
+    val podeAprovar: Boolean get() = statusVinculo == 0 && origemCadastro == 2
 }
 
-data class ConsultaDoPacienteUi(val idPaciente: Int, val dataIso: String)
+data class ConsultaDoPacienteUi(
+    val idPaciente: Int,
+    val dataIso: String,
+    val cancelada: Boolean
+)
 
 data class AnotacaoUi(
     val id: Int,
@@ -74,6 +80,7 @@ data class PacientesProfissionalState(
     val erroIndicadores: String? = null,
     val categorias: Set<String> = emptySet(),
     val registrosCompartilhados: List<RegistroHumorApi> = emptyList(),
+    val tratamentosCompartilhados: List<TratamentoUi> = emptyList(),
     val toast: String? = null,
     val toastSucesso: Boolean = true
 ) {
@@ -91,6 +98,38 @@ data class PacientesProfissionalState(
     }
 }
 
+private sealed interface Resposta<T> {
+    data class Ok<T>(val dados: T) : Resposta<T>
+    data class Erro<T>(val codigoHttp: Int, val erroConexao: Boolean) : Resposta<T>
+}
+
+// ---- campos de status que o back devolve ora como texto, ora como número ----
+
+private fun com.google.gson.JsonElement?.textoNormalizado(): String? {
+    if (this == null || isJsonNull || !isJsonPrimitive) return null
+    return try { asString.trim().lowercase() } catch (_: Exception) { null }
+}
+
+/** 1 = ativo, 0 = pendente, 2 = recusado/encerrado. Sem valor: 1. */
+private fun com.google.gson.JsonElement?.comoStatusVinculo(): Int = when (textoNormalizado()) {
+    null, "" -> 1
+    "1", "ativo", "aceito", "aprovado", "aprovada" -> 1
+    "0", "pendente", "aguardando" -> 0
+    else -> 2
+}
+
+/** 1 = o profissional convidou, 2 = o paciente convidou. */
+private fun com.google.gson.JsonElement?.comoOrigemCadastro(): Int = when (textoNormalizado()) {
+    "2", "paciente" -> 2
+    else -> 1
+}
+
+/** status_atividade do paciente: só "0", "inativo" e "false" são inativos. */
+private fun com.google.gson.JsonElement?.comoAtivo(): Boolean = when (textoNormalizado()) {
+    "0", "inativo", "false" -> false
+    else -> true
+}
+
 class PacientesProfissionalViewModel : ViewModel() {
 
     var state by mutableStateOf(PacientesProfissionalState())
@@ -98,104 +137,94 @@ class PacientesProfissionalViewModel : ViewModel() {
 
     private var indicadoresJob: Job? = null
 
-    private class Resp(val conectou: Boolean, val codigo: Int, val corpo: JsonObject?) {
-        // O back responde 404 quando a lista está vazia: não é erro
-        val falhou: Boolean get() = !conectou || (codigo !in 200..299 && codigo != 404)
-        val ok: Boolean get() = conectou && codigo in 200..299
-    }
-
     fun limparToast() {
         state = state.copy(toast = null)
     }
 
-    fun limparBusca() {
-        state = state.copy(buscando = false, buscaFeita = false, resultadosBusca = emptyList())
-    }
-
-    // ---------------------------------------------------------------------
-    // Lista
-    // ---------------------------------------------------------------------
-
     fun carregar(token: String) {
-        if (state.isLoading) return
+        if (token.isBlank()) return
         state = state.copy(isLoading = true, erro = null)
 
         viewModelScope.launch {
-            val profissionalService = RetrofitFactory().getProfissionalService()
-
-            val (respPacientes, respConsultas, respAcessos) = coroutineScope {
-                val p = async { chamar { profissionalService.listarPacientesVinculados(token) } }
-                val c = async { chamar { profissionalService.getMinhasConsultas(token) } }
-                val a = async { chamar { RetrofitFactory().getSolicitacaoAcessoService().listarSolicitacoesAcesso(token) } }
-                Triple(p.await(), c.await(), a.await())
+            val (respPacientes, respConsultas) = coroutineScope {
+                val defPacientes = async { chamar { RetrofitFactory().getProfissionalService().listarPacientesVinculados(token) } }
+                val defConsultas = async { chamar { RetrofitFactory().getProfissionalService().getMinhasConsultas(token) } }
+                defPacientes.await() to defConsultas.await()
             }
 
             if (respPacientes.falhou) {
                 state = state.copy(
                     isLoading = false,
+                    carregou = true,
                     erro = mensagemErroHttp(respPacientes.codigo, !respPacientes.conectou, "carregar os pacientes")
                 )
                 return@launch
             }
 
-            val pacientes = respPacientes.corpo.listaEm("paciente").mapNotNull { elem ->
+            val listaPacientes = respPacientes.corpo.listaEm("paciente", "pacientes").mapNotNull { elem ->
                 try {
                     val obj = elem.asJsonObject
                     val id = obj.num("id")
                     if (id <= 0) return@mapNotNull null
-                    val atividade = (obj.txt("status_atividade") ?: "").lowercase()
+                    // O banco mistura texto e número nestes campos ("ativo"/1, "pendente"/0, "paciente"/2).
+                    // Antes, asInt em "ativo" lançava exceção e o paciente inteiro era descartado da lista.
+                    val ativo = obj.get("status_atividade").comoAtivo()
+
+                    // Vínculo: 0 = pendente, 1 = ativo (recusado/encerrado não aparece na lista)
+                    val statusVin = obj.get("status_vinculo").comoStatusVinculo()
+                    if (statusVin == 2) return@mapNotNull null
+
+                    // Origem cadastro: 1 = profissional convidou, 2 = paciente convidou
+                    val origemCad = obj.get("origem_cadastro").comoOrigemCadastro()
+
                     PacienteVinculadoUi(
                         id = id,
                         idVinculo = obj.num("id_vinculo"),
                         nome = obj.txt("nome_completo") ?: obj.txt("apelido") ?: "Paciente $id",
-                        ativo = atividade.isEmpty() || atividade.startsWith("ativ"),
-                        statusVinculo = obj.num("status_vinculo"),
-                        origemCadastro = obj.num("origem_cadastro"),
-                        desdeIso = obj.txt("desde").paraIso(),
+                        ativo = ativo,
+                        statusVinculo = statusVin,
+                        origemCadastro = origemCad,
+                        desdeIso = (obj.txt("desde") ?: obj.txt("data_criacao")).paraIso(),
                         email = obj.txt("email"),
                         celular = obj.txt("celular"),
-                        foto = obj.txt("foto_avatar")
+                        foto = obj.txt("foto_avatar") ?: obj.txt("foto")
                     )
                 } catch (_: Exception) {
                     null
                 }
             }
 
-            val consultas = respConsultas.corpo.listaEm("consulta").mapNotNull { elem ->
-                try {
-                    val obj = elem.asJsonObject
-                    if ((obj.txt("status") ?: "").lowercase().contains("cancel")) return@mapNotNull null
-                    val data = obj.txt("data").paraIso() ?: return@mapNotNull null
-                    val idPaciente = obj.num("id_paciente")
-                    if (idPaciente <= 0) null else ConsultaDoPacienteUi(idPaciente, data)
-                } catch (_: Exception) {
-                    null
+            val listaConsultas = if (respConsultas.ok) {
+                respConsultas.corpo.listaEm("consulta", "consultas").mapNotNull { elem ->
+                    try {
+                        val obj = elem.asJsonObject
+                        val idPac = obj.num("id_paciente")
+                        val dataIso = obj.txt("data_consulta")?.paraIso() ?: return@mapNotNull null
+                        val cancelada = obj.txt("status").orEmpty().lowercase() == "cancelada"
+                        if (cancelada || idPac <= 0) null
+                        else ConsultaDoPacienteUi(idPaciente = idPac, dataIso = dataIso, cancelada = false)
+                    } catch (_: Exception) {
+                        null
+                    }
                 }
-            }
+            } else emptyList()
 
             state = state.copy(
                 isLoading = false,
                 carregou = true,
-                erro = null,
-                pacientes = pacientes,
-                consultas = consultas,
-                acessos = if (respAcessos.ok) respAcessos.corpo.listaEm("solicitacaoAcesso")
-                    .map { it.asJsonObject }
-                    .sortedBy { it.num("id") }
-                    .associate { it.num("id_paciente") to it.txt("status").orEmpty() }
-                    else emptyMap(),
-                acessoSolicitado = if (respAcessos.ok) respAcessos.corpo.listaEm("solicitacaoAcesso")
-                    .map { it.asJsonObject }
-                    .sortedBy { it.num("id") }
-                    .associate { it.num("id_paciente") to it.txt("status") }
-                    .filterValues { it == "pendente" }.keys else emptySet()
+                pacientes = listaPacientes,
+                consultas = listaConsultas
             )
         }
     }
 
     // ---------------------------------------------------------------------
-    // Novo paciente (busca na plataforma + vínculo)
+    // Busca (modal "Novo paciente")
     // ---------------------------------------------------------------------
+
+    fun limparBusca() {
+        state = state.copy(buscando = false, buscaFeita = false, resultadosBusca = emptyList())
+    }
 
     fun buscar(token: String, termo: String) {
         val t = termo.trim()
@@ -423,7 +452,8 @@ class PacientesProfissionalViewModel : ViewModel() {
         indicadoresJob?.cancel()
         state = state.copy(
             idIndicadores = idPaciente, carregandoIndicadores = true,
-            erroIndicadores = null, categorias = emptySet(), registrosCompartilhados = emptyList()
+            erroIndicadores = null, categorias = emptySet(), registrosCompartilhados = emptyList(),
+            tratamentosCompartilhados = emptyList()
         )
         indicadoresJob = viewModelScope.launch {
             val resp = chamar { RetrofitFactory().getSolicitacaoAcessoService().indicadoresCompartilhados(token, idPaciente) }
@@ -439,12 +469,17 @@ class PacientesProfissionalViewModel : ViewModel() {
             val status = dados?.txt("status").orEmpty()
             val categorias = dados?.getAsJsonArray("categorias")
                 ?.mapNotNull { it.takeIf { v -> v.isJsonPrimitive }?.asString }?.toSet().orEmpty()
+            // Os tratamentos do paciente vêm junto dos indicadores compartilhados (response.tratamento).
+            // "pacientes/me/tratamentos" seria o tratamento de quem está logado, ou seja, do próprio profissional.
+            val tratamentos = TratamentoMapper.lista(resp.corpo)
+
             state = state.copy(
                 carregandoIndicadores = false,
                 acessos = state.acessos + (idPaciente to status),
                 acessoSolicitado = if (status == "pendente") state.acessoSolicitado + idPaciente else state.acessoSolicitado - idPaciente,
                 categorias = categorias,
-                registrosCompartilhados = DashboardMapper.registrosHumor(resp.corpo)
+                registrosCompartilhados = DashboardMapper.registrosHumor(resp.corpo),
+                tratamentosCompartilhados = tratamentos
             )
         }
     }
@@ -457,4 +492,9 @@ class PacientesProfissionalViewModel : ViewModel() {
     } catch (e: Exception) {
         Resp(false, 0, null)
     }
+}
+
+private data class Resp(val ok: Boolean, val codigo: Int, val corpo: JsonObject?) {
+    val conectou: Boolean get() = codigo > 0
+    val falhou: Boolean get() = !ok
 }

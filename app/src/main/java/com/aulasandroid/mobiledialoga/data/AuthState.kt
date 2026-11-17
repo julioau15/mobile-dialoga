@@ -359,6 +359,14 @@ class AuthState(private val context: Context) {
 
         val sucesso = withContext(Dispatchers.IO) {
             try {
+                if (dados != null && dados.has("id_profissional") && !dados.get("id_profissional").isJsonNull) {
+                    val idProf = dados.get("id_profissional").asString
+                    if (!idProf.isNullOrBlank()) {
+                        try {
+                            RetrofitFactory().getPacienteService().vincularProfissional(tokenAtual, idProf).execute()
+                        } catch (_: Exception) { }
+                    }
+                }
                 val response = if (nivelAtual == "1" || nivelAtual == "1.0" || nivelAtual == "profissional") {
                     RetrofitFactory().getProfissionalService().concluirPrimeiroAcesso(tokenAtual).execute()
                 } else {
