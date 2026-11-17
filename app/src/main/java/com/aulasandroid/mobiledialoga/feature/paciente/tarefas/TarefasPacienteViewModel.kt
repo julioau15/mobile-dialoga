@@ -71,6 +71,10 @@ data class TarefasPacienteUiState(
 
     val algumaRespostaPreenchida: Boolean get() = perguntas.any { perguntaRespondida(it) }
 
+    val progressoRespostas: Int
+        get() = if (perguntas.isEmpty()) 0
+            else perguntas.count { perguntaRespondida(it) } * 100 / perguntas.size
+
     /** Só libera o envio com todas as perguntas obrigatórias (*) respondidas. */
     val podeEnviar: Boolean
         get() = perguntas.isNotEmpty() && algumaRespostaPreenchida && perguntasObrigatoriasPendentes.isEmpty()
@@ -84,19 +88,31 @@ class TarefasPacienteViewModel : ViewModel() {
     private val estado: TarefasPacienteUiState get() = _uiState.value ?: TarefasPacienteUiState()
 
     private val service: TarefaService get() = RetrofitFactory().getTarefaService()
+    private var respostasCarregadas = false
+    private var versaoLista = 0
+    private val progressosSalvos = mutableMapOf<Int, Int>()
 
     // ---------- Lista de tarefas ----------
 
     fun carregarTarefas(token: String?) {
         if (token.isNullOrBlank()) return
+        val versao = ++versaoLista
         _uiState.value = estado.copy(isLoading = true, erroGeral = null)
 
         service.listarTarefas(token).enqueue(object : Callback<JsonObject> {
             override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
                 when {
                     response.isSuccessful -> {
-                        val lista = converterTarefas(response.body())
+                        if (versao != versaoLista) return
+                        val lista = converterTarefas(response.body()).map { tarefa ->
+                            val salvo = progressosSalvos[tarefa.idTarefaDestinatario ?: tarefa.id]
+                            if (salvo != null && tarefa.getStatusFormatado() != "Concluída")
+                                tarefa.copy(progresso = salvo) else tarefa
+                        }
                         _uiState.value = estado.copy(isLoading = false, tarefas = lista, erroGeral = null)
+                        lista.filter { it.getStatusFormatado() != "Concluída" }.forEach {
+                            carregarProgressoSalvo(token, it, versao)
+                        }
                     }
                     // o back responde 404 quando o paciente ainda não tem tarefas
                     response.code() == 404 -> {
@@ -110,6 +126,50 @@ class TarefasPacienteViewModel : ViewModel() {
 
             override fun onFailure(call: Call<JsonObject>, t: Throwable) {
                 falhaAoCarregarLista("Sem conexão com o servidor.")
+            }
+        })
+    }
+
+    // A listagem pode não devolver o percentual. Reconstrói a partir das respostas persistidas.
+    private fun carregarProgressoSalvo(token: String, tarefa: TarefaItemDto, versao: Int) {
+        val idDestinatario = tarefa.idTarefaDestinatario?.takeIf { it > 0 } ?: tarefa.id
+        service.listarPerguntasPorTarefa(tarefa.id, token).enqueue(object : Callback<JsonObject> {
+            override fun onResponse(call: Call<JsonObject>, response: Response<JsonObject>) {
+                if (versao != versaoLista || !response.isSuccessful) return
+                val perguntas = converterPerguntas(response.body())
+                if (perguntas.isEmpty()) return
+                service.listarRespostasPorTarefaDestinatario(idDestinatario, token)
+                    .enqueue(object : Callback<JsonObject> {
+                        override fun onResponse(c: Call<JsonObject>, r: Response<JsonObject>) {
+                            if (versao != versaoLista || (!r.isSuccessful && r.code() != 404)) return
+                            val respostas = findArray(r.body(), "resposta", "respostas", "response", "dados")
+                                .filter { it.isJsonObject }.map { it.asJsonObject }
+                                .groupBy { parseAttrInt(it, "id_pergunta") }
+                            val respondidas = perguntas.count { pergunta ->
+                                respostas[pergunta.id].orEmpty().any { resposta ->
+                                    when (pergunta.tipoNormalizado()) {
+                                        "humor", "unica_escolha", "multipla_escolha" ->
+                                            parseAttrInt(resposta, "id_opcao_pergunta") > 0
+                                        "escala" -> parseAttrString(resposta, "valor")?.toIntOrNull() in 0..10
+                                        else -> !parseAttrString(resposta, "valor").isNullOrBlank()
+                                    }
+                                }
+                            }
+                            val progresso = respondidas * 100 / perguntas.size
+                            progressosSalvos[idDestinatario] = progresso
+                            _uiState.value = estado.copy(tarefas = estado.tarefas.map { item ->
+                                if ((item.idTarefaDestinatario ?: item.id) == idDestinatario &&
+                                    item.getStatusFormatado() != "Concluída") item.copy(progresso = progresso)
+                                else item
+                            })
+                        }
+                        override fun onFailure(c: Call<JsonObject>, t: Throwable) {
+                            // Mantém o último percentual conhecido se não houver conexão.
+                        }
+                    })
+            }
+            override fun onFailure(call: Call<JsonObject>, t: Throwable) {
+                // Mantém o último percentual conhecido se não houver conexão.
             }
         })
     }
@@ -170,6 +230,7 @@ class TarefasPacienteViewModel : ViewModel() {
     // ---------- Abrir tarefa (perguntas + respostas) ----------
 
     fun abrirTarefa(token: String?, tarefa: TarefaItemDto) {
+        respostasCarregadas = false
         _uiState.value = estado.copy(
             tarefaEmEdicao = tarefa,
             perguntas = emptyList(),
@@ -304,6 +365,35 @@ class TarefasPacienteViewModel : ViewModel() {
                     respostasTexto = mapaTexto,
                     respostasEscala = mapaEscala
                 )
+                respostasCarregadas = true
+                val tarefa = estado.tarefaEmEdicao ?: return
+                if (tarefa.getStatusFormatado() != "Concluída") {
+                    val progresso = if (perguntas.isEmpty()) tarefa.progresso
+                        else perguntas.count { estado.perguntaRespondida(it) } * 100 / perguntas.size
+                    _uiState.value = estado.copy(isEnviandoResposta = true)
+                    service.atualizarStatusTarefaDestinatario(
+                        idDestinatario, payloadStatus(tarefa, token, "em_andamento", progresso), token
+                    ).enqueue(object : Callback<JsonObject> {
+                        override fun onResponse(c: Call<JsonObject>, r: Response<JsonObject>) {
+                            if (estado.tarefaEmEdicao?.id != tarefa.id) return
+                            if (r.isSuccessful) {
+                                val atualizada = tarefa.copy(status = "em_andamento", progresso = progresso)
+                                _uiState.value = estado.copy(
+                                    isEnviandoResposta = false,
+                                    tarefaEmEdicao = atualizada,
+                                    tarefas = estado.tarefas.map { if (it.id == tarefa.id) atualizada else it }
+                                )
+                            } else {
+                                _uiState.value = estado.copy(isEnviandoResposta = false, erroDetalhes =
+                                    mensagemDeErro(r, "Não foi possível iniciar a tarefa"))
+                            }
+                        }
+                        override fun onFailure(c: Call<JsonObject>, t: Throwable) {
+                            if (estado.tarefaEmEdicao?.id != tarefa.id) return
+                            _uiState.value = estado.copy(isEnviandoResposta = false, erroDetalhes = "Sem conexão. Salve antes de sair.")
+                        }
+                    })
+                }
             }
 
             override fun onFailure(call: Call<JsonObject>, t: Throwable) {
@@ -335,12 +425,14 @@ class TarefasPacienteViewModel : ViewModel() {
     // ---------- Handlers de interação com as respostas ----------
 
     fun onOpcaoUnicaSelecionada(idPergunta: Int, idOpcao: Int) {
+        if (estado.isEnviandoResposta) return
         val mapa = estado.respostasOpcaoUnica.toMutableMap()
         mapa[idPergunta] = idOpcao
         _uiState.value = estado.copy(respostasOpcaoUnica = mapa)
     }
 
     fun onOpcaoMultiplaToggled(idPergunta: Int, idOpcao: Int) {
+        if (estado.isEnviandoResposta) return
         val mapa = estado.respostasMultiplasOpcoes.toMutableMap()
         val lista = mapa[idPergunta]?.toMutableList() ?: mutableListOf()
         if (lista.contains(idOpcao)) lista.remove(idOpcao) else lista.add(idOpcao)
@@ -349,12 +441,14 @@ class TarefasPacienteViewModel : ViewModel() {
     }
 
     fun onTextoRespostaChanged(idPergunta: Int, texto: String) {
+        if (estado.isEnviandoResposta) return
         val mapa = estado.respostasTexto.toMutableMap()
         mapa[idPergunta] = texto
         _uiState.value = estado.copy(respostasTexto = mapa)
     }
 
     fun onEscalaRespostaSelected(idPergunta: Int, nivel: Int) {
+        if (estado.isEnviandoResposta) return
         val mapa = estado.respostasEscala.toMutableMap()
         mapa[idPergunta] = nivel
         _uiState.value = estado.copy(respostasEscala = mapa)
@@ -377,10 +471,27 @@ class TarefasPacienteViewModel : ViewModel() {
         _uiState.value = estado.copy(mostrarModalConfirmarEnvio = false)
     }
 
-    fun confirmarEEnviarResposta(token: String?) {
+    fun salvarEVoltar(token: String?) {
+        if (estado.isEnviandoResposta) return
+        if (estado.tarefaEmEdicao?.getStatusFormatado() == "Concluída" ||
+            estado.isLoadingDetalhes || !respostasCarregadas) {
+            fecharEdicaoTarefa()
+            return
+        }
+        enviarResposta(token, finalizar = false)
+    }
+
+    fun confirmarEEnviarResposta(token: String?) = enviarResposta(token, finalizar = true)
+
+    private fun enviarResposta(token: String?, finalizar: Boolean) {
         val tarefa = estado.tarefaEmEdicao ?: return
         if (estado.isEnviandoResposta) return
-        if (!estado.podeEnviar) {
+        if (!respostasCarregadas) return
+        if (token.isNullOrBlank()) {
+            _uiState.value = estado.copy(erroDetalhes = "Sessão expirada. Entre novamente.")
+            return
+        }
+        if (finalizar && !estado.podeEnviar) {
             _uiState.value = estado.copy(
                 mostrarModalConfirmarEnvio = false,
                 erroDetalhes = "Responda todas as perguntas obrigatórias (*) antes de enviar."
@@ -423,7 +534,7 @@ class TarefasPacienteViewModel : ViewModel() {
         }
 
         val payload = JsonObject().apply {
-            addProperty("enviar_definitivamente", true)
+            addProperty("enviar_definitivamente", finalizar)
             add("respostas", arrayRespostas)
         }
 
@@ -439,15 +550,29 @@ class TarefasPacienteViewModel : ViewModel() {
                 }
 
                 // respostas salvas: marca a tarefa como concluída (se esta chamada falhar, a lista mostra o status real)
-                val atualizacao = JsonObject().apply { addProperty("status", "concluida") }
+                val progresso = if (finalizar) 100 else estado.progressoRespostas
+                val atualizacao = payloadStatus(tarefa, token, if (finalizar) "concluida" else "em_andamento", progresso)
                 service.atualizarStatusTarefaDestinatario(idDestinatario, atualizacao, token)
                     .enqueue(object : Callback<JsonObject> {
                         override fun onResponse(c: Call<JsonObject>, r: Response<JsonObject>) {
-                            finalizarEnvioSucesso(token)
+                            if (r.isSuccessful) {
+                                progressosSalvos[idDestinatario] = progresso
+                                _uiState.value = estado.copy(tarefas = estado.tarefas.map {
+                                    if ((it.idTarefaDestinatario ?: it.id) == idDestinatario)
+                                        it.copy(progresso = progresso, status = if (finalizar) "concluida" else "em_andamento")
+                                    else it
+                                })
+                                finalizarEnvioSucesso(token, finalizar)
+                            }
+                            else _uiState.value = estado.copy(
+                                isEnviandoResposta = false,
+                                erroDetalhes = mensagemDeErro(r, "Não foi possível atualizar o status da tarefa")
+                            )
                         }
 
                         override fun onFailure(c: Call<JsonObject>, t: Throwable) {
-                            finalizarEnvioSucesso(token)
+                            _uiState.value = estado.copy(isEnviandoResposta = false,
+                                erroDetalhes = "Sem conexão. Tente salvar novamente.")
                         }
                     })
             }
@@ -458,7 +583,17 @@ class TarefasPacienteViewModel : ViewModel() {
         })
     }
 
-    private fun finalizarEnvioSucesso(token: String?) {
+    private fun payloadStatus(tarefa: TarefaItemDto, token: String?, status: String, progresso: Int) =
+        JsonObject().apply {
+            addProperty("id_tarefa", tarefa.id)
+            token?.let { idDoToken(it) }?.let { addProperty("id_paciente", it) }
+            addProperty("status", status)
+            addProperty("progresso", progresso)
+            tarefa.prazo?.take(10)?.let { addProperty("prazo", it) }
+            if (status == "concluida") addProperty("data_conclusao", agoraParaBanco())
+        }
+
+    private fun finalizarEnvioSucesso(token: String?, finalizar: Boolean) {
         _uiState.value = estado.copy(
             isEnviandoResposta = false,
             tarefaEmEdicao = null,
@@ -468,7 +603,7 @@ class TarefasPacienteViewModel : ViewModel() {
             respostasTexto = emptyMap(),
             respostasEscala = emptyMap(),
             erroDetalhes = null,
-            toastMensagem = "Resposta enviada ao profissional"
+            toastMensagem = if (finalizar) "Resposta enviada ao profissional" else "Progresso salvo. Continue quando quiser."
         )
         carregarTarefas(token)
     }

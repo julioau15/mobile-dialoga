@@ -3,6 +3,7 @@
 package com.aulasandroid.mobiledialoga.feature.paciente.tarefas
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -130,13 +131,15 @@ fun TarefasPacienteScreen(
 
     val tarefaEmEdicao = estado.tarefaEmEdicao
 
+    BackHandler(enabled = tarefaEmEdicao != null) { vm.salvarEVoltar(token) }
+
     if (tarefaEmEdicao != null) {
         // Tela cheia de resposta (usa o mesmo modifier da lista: respeita o padding do topo do app)
         TelaRespostaTarefaDetalhada(
             modifier = modifier,
             tarefa = tarefaEmEdicao,
             estado = estado,
-            onVoltar = { vm.fecharEdicaoTarefa() },
+            onVoltar = { vm.salvarEVoltar(token) },
             onOpcaoUnicaSelected = { pId, oId -> vm.onOpcaoUnicaSelecionada(pId, oId) },
             onOpcaoMultiplaToggled = { pId, oId -> vm.onOpcaoMultiplaToggled(pId, oId) },
             onTextoChanged = { pId, txt -> vm.onTextoRespostaChanged(pId, txt) },
@@ -671,6 +674,19 @@ private fun TelaRespostaTarefaDetalhada(
                 Text(text = "Prazo: ${tarefa.getPrazoFormatado()}", fontSize = 12.sp, color = CorSecundaria)
             }
 
+            if (!estado.isLoadingDetalhes && estado.perguntas.isNotEmpty()) {
+                val progresso = if (jaConcluida) 100 else estado.progressoRespostas
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(text = "Progresso: $progresso%", fontSize = 12.sp, color = CorSecundaria)
+                Spacer(modifier = Modifier.height(4.dp))
+                LinearProgressIndicator(
+                    progress = { progresso / 100f },
+                    modifier = Modifier.fillMaxWidth().height(6.dp),
+                    color = CorPrimaria,
+                    trackColor = Color(0xFFEFE8F8)
+                )
+            }
+
             if (!tarefa.instrucoes.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(text = tarefa.instrucoes, fontSize = 13.sp, color = CorTexto, lineHeight = 19.sp)
@@ -797,8 +813,8 @@ private fun TelaRespostaTarefaDetalhada(
 
                     Spacer(modifier = Modifier.height(12.dp))
                     DialogaOutlinedButton(
-                        texto = "Marcar como concluída",
-                        onClick = onMarcarConcluida,
+                        texto = if (estado.isEnviandoResposta) "Salvando..." else "Salvar e continuar depois",
+                        onClick = onVoltar,
                         modifier = Modifier.fillMaxWidth()
                     )
                 } else {
